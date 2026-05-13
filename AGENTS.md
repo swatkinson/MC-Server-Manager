@@ -78,8 +78,8 @@ The README is the single source of truth for what this project does and how to r
 ### Branch Naming Convention
 
 All feature branches should be named after their GitHub issue number:
-- Format: `claude/<feature-description>-#<issue-number>` or just `#<issue-number>`
-- Examples: `#4-server-status-header`, `claude/console-interface-#5`
+- Format: `#<issue-number>-<issue-title>`
+- Examples: `#4-server-status-header`, `#5-console-interface-command-input`
 
 This makes it easy to trace code changes back to their requirements and track progress.
 
