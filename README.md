@@ -19,15 +19,22 @@ A self-hosted web dashboard for managing a Minecraft server, built with React + 
 - [x] Basic dashboard UI (TanStack Router + React + Vite)
 - [x] Automated deployment via GitHub Actions → rsync → nginx
 
-### Phase 2 — Server Control
+### Phase 2 — Dashboard & Server Control
+- [ ] Server status header with name, IP, MOTD, and status (#4)
+- [ ] Server control buttons: start / stop / restart (#4)
+- [ ] Live console display with command input (#5)
+- [ ] System monitoring gauges: CPU, RAM, Storage (#7)
 - [ ] Real start / stop / restart (via systemctl or screen/tmux)
 - [ ] Live server status (online/offline, uptime)
-- [ ] CPU and RAM monitoring
 
-### Phase 3 — Player Management
-- [ ] Online player list
+### Phase 3 — Player Management & Configuration
+- [ ] Online player list (#6)
 - [ ] Kick / ban / op / whitelist controls
 - [ ] Player history log
+- [ ] Server configuration editor (server.properties) (#8)
+- [ ] JVM parameters editor (#8)
+- [ ] Whitelist manager (#8)
+- [ ] World file download/backup (#8)
 
 ### Phase 4 — Console & Logs
 - [ ] Live log streaming (WebSocket)

@@ -75,6 +75,14 @@ src/
 
 The README is the single source of truth for what this project does and how to run it. Keep it accurate.
 
+### Branch Naming Convention
+
+All feature branches should be named after their GitHub issue number:
+- Format: `#<issue-number>-<issue-title>`
+- Examples: `#4-server-status-header`, `#5-console-interface-command-input`
+
+This makes it easy to trace code changes back to their requirements and track progress.
+
 ### When Adding a New Page / Route
 
 1. Create the page component in `src/pages/`
