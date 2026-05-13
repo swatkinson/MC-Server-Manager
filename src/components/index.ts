@@ -5,3 +5,8 @@ export { ConsoleInterface } from './ConsoleInterface';
 export { ConsoleInput } from './ConsoleInput';
 export { PlayerList } from './PlayerList';
 export { MetricsGauges } from './MetricsGauges';
+export { ConfigPanel } from './ConfigPanel';
+export { ServerPropertiesEditor } from './ServerPropertiesEditor';
+export { WhitelistManager } from './WhitelistManager';
+export { JVMParametersEditor } from './JVMParametersEditor';
+export { WorldBackupDownloader } from './WorldBackupDownloader';

@@ -1,24 +1,42 @@
 import { Player } from '../types/index.js';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
-const execFileAsync = promisify(execFile);
+interface PlayerData {
+  joinTime: number;
+  isOp: boolean;
+}
 
 export class PlayerManager {
-  private playerJoinTimes: Map<string, number> = new Map();
+  private playerJoinTimes: Map<string, PlayerData> = new Map();
+  private minecraftDir = process.env.MINECRAFT_DIR || `${process.env.HOME}/MinecraftServer`;
+  private opsPath = path.join(this.minecraftDir, 'ops.json');
+  private opsCache: Set<string> = new Set();
+  private lastOpsCheckTime = 0;
 
   async getPlayerList(): Promise<Player[]> {
     try {
-      // Execute the /list command in Minecraft server
-      // This will parse the output and return player information
-      execFile('screen', ['-S', 'minecraft', '-X', 'stuff', 'list\n']);
+      // Refresh ops cache if not recently updated
+      if (Date.now() - this.lastOpsCheckTime > 60000) {
+        await this.loadOpsCache();
+      }
 
-      // Give the server a moment to process the command
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // Return online players sorted by join time (most recent first)
+      const players: Player[] = [];
+      const sortedEntries = Array.from(this.playerJoinTimes.entries())
+        .sort(([, dataA], [, dataB]) => dataB.joinTime - dataA.joinTime);
 
-      // In a real implementation, we'd parse the server logs to extract player list
-      // For now, we'll return an empty array as a placeholder
-      return this.parsePlayersFromLogs();
+      for (const [playerName, playerData] of sortedEntries) {
+        players.push({
+          uuid: this.generateUUID(playerName),
+          name: playerName,
+          ip: '0.0.0.0', // IP would need to be extracted from logs
+          joinTime: playerData.joinTime,
+          isOp: playerData.isOp,
+        });
+      }
+
+      return players;
     } catch (error) {
       console.error('Error getting player list:', error);
       return [];
@@ -26,39 +44,15 @@ export class PlayerManager {
   }
 
   /**
-   * Parse player information from recent server logs
-   * Minecraft logs have patterns like:
-   * "[HH:MM:SS] [Server thread/INFO]: Player joined the game"
-   * "[HH:MM:SS] [Server thread/INFO]: Player left the game"
-   */
-  private parsePlayersFromLogs(): Player[] {
-    // This would be populated by parsing the actual logs
-    // For the MVP, we track joins/leaves from console output
-    const players: Player[] = [];
-
-    // Sort by join time (most recent first)
-    const sortedEntries = Array.from(this.playerJoinTimes.entries())
-      .sort(([, timeA], [, timeB]) => timeB - timeA);
-
-    for (const [playerName, joinTime] of sortedEntries) {
-      players.push({
-        uuid: this.generateUUID(playerName),
-        name: playerName,
-        ip: '0.0.0.0', // Would need actual IP from logs
-        joinTime,
-        isOp: false, // Would need to check ops.json
-      });
-    }
-
-    return players;
-  }
-
-  /**
    * Track player join time from log parsing
    */
   trackPlayerJoin(playerName: string): void {
+    const isOp = this.opsCache.has(playerName);
     if (!this.playerJoinTimes.has(playerName)) {
-      this.playerJoinTimes.set(playerName, Date.now());
+      this.playerJoinTimes.set(playerName, {
+        joinTime: Date.now(),
+        isOp,
+      });
     }
   }
 
@@ -80,32 +74,68 @@ export class PlayerManager {
    * Get all online players
    */
   getOnlinePlayers(): Player[] {
-    return this.parsePlayersFromLogs();
+    const players: Player[] = [];
+    const sortedEntries = Array.from(this.playerJoinTimes.entries())
+      .sort(([, dataA], [, dataB]) => dataB.joinTime - dataA.joinTime);
+
+    for (const [playerName, playerData] of sortedEntries) {
+      players.push({
+        uuid: this.generateUUID(playerName),
+        name: playerName,
+        ip: '0.0.0.0',
+        joinTime: playerData.joinTime,
+        isOp: playerData.isOp,
+      });
+    }
+
+    return players;
   }
 
   /**
-   * Generate a pseudo-UUID from player name
+   * Load ops from ops.json file
+   */
+  private async loadOpsCache(): Promise<void> {
+    try {
+      const content = await fs.readFile(this.opsPath, 'utf-8');
+      const ops = JSON.parse(content);
+
+      this.opsCache.clear();
+      if (Array.isArray(ops)) {
+        // ops.json is an array of objects with 'name' property
+        for (const op of ops) {
+          if (op.name) {
+            this.opsCache.add(op.name);
+          }
+        }
+      }
+
+      this.lastOpsCheckTime = Date.now();
+    } catch (error) {
+      console.error('Error loading ops.json:', error);
+      // If ops.json doesn't exist or is invalid, just continue with empty ops cache
+    }
+  }
+
+  /**
+   * Generate a deterministic UUID from player name
    * In production, this would come from the actual game data
    */
   private generateUUID(playerName: string): string {
-    // Simple deterministic UUID generation for demo purposes
+    // Create a deterministic pseudo-UUID based on player name
+    // Format: 8-4-4-4-12 (standard UUID format)
     let hash = 0;
     for (let i = 0; i < playerName.length; i++) {
       const char = playerName.charCodeAt(i);
       hash = ((hash << 5) - hash) + char;
       hash = hash & hash;
     }
-    const uuid = [
-      this.padZero(Math.abs(hash >> 0).toString(16), 8),
-      this.padZero(Math.abs(hash >> 8).toString(16), 4),
-      this.padZero(Math.abs(hash >> 16).toString(16), 4),
-      this.padZero(Math.abs(hash >> 24).toString(16), 4),
-      this.padZero(Date.now().toString(16), 12),
-    ].join('-');
-    return uuid;
-  }
 
-  private padZero(str: string, len: number): string {
-    return str.padStart(len, '0');
+    const part1 = Math.abs(hash >> 0).toString(16).padStart(8, '0').slice(-8);
+    const part2 = Math.abs(hash >> 8).toString(16).padStart(4, '0').slice(-4);
+    const part3 = Math.abs(hash >> 16).toString(16).padStart(4, '0').slice(-4);
+    const part4 = Math.abs(hash >> 24).toString(16).padStart(4, '0').slice(-4);
+    const part5 = Math.abs(hash).toString(16).padStart(12, '0').slice(-12);
+
+    return `${part1}-${part2}-${part3}-${part4}-${part5}`;
   }
 }
