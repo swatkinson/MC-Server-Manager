@@ -2,6 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import path from 'path';
+import fs from 'fs';
+import archiver from 'archiver';
 import { ServerManager } from './services/ServerManager.js';
 import { MetricsCollector } from './services/MetricsCollector.js';
 import { ConsoleManager } from './services/ConsoleManager.js';
@@ -183,6 +186,46 @@ app.delete('/api/config/whitelist/:uuid', async (req, res) => {
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: 'Failed to remove from whitelist' });
+  }
+});
+
+app.post('/api/server/world-backup', async (req, res) => {
+  try {
+    const minecraftDir = process.env.MINECRAFT_DIR || `${process.env.HOME}/MinecraftServer`;
+    const worldPath = require('path').join(minecraftDir, 'world');
+    const archiver = require('archiver');
+    const fs = require('fs');
+
+    // Set response headers
+    res.setHeader('Content-Type', 'application/gzip');
+    res.setHeader('Content-Disposition', `attachment; filename="world-backup-${new Date().toISOString().split('T')[0]}.tar.gz"`);
+
+    // Create archive stream
+    const archive = archiver('tar', { gzip: true });
+
+    // Handle archive errors
+    archive.on('error', (err: any) => {
+      console.error('Archive error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to create backup archive' });
+      }
+    });
+
+    // Pipe archive to response
+    archive.pipe(res);
+
+    // Append world directory to archive
+    if (fs.existsSync(worldPath)) {
+      archive.directory(worldPath, 'world');
+    } else {
+      return res.status(400).json({ error: 'World directory not found' });
+    }
+
+    // Finalize the archive
+    await archive.finalize();
+  } catch (error) {
+    console.error('World backup error:', error);
+    res.status(500).json({ error: 'Failed to create world backup' });
   }
 });
 

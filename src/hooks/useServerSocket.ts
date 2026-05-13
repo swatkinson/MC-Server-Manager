@@ -50,6 +50,7 @@ export function useServerSocket() {
         socket.on(event, callback);
         return () => socket.off(event, callback);
       }
+      return undefined;
     },
     [socket]
   );

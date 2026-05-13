@@ -91,6 +91,35 @@ export class ConfigManager {
     }
   }
 
+  async setWhitelist(entries: Array<{ uuid: string; name: string }>): Promise<{ success: boolean; message: string }> {
+    try {
+      await fs.writeFile(this.whitelistPath, JSON.stringify(entries, null, 2), 'utf-8');
+      return { success: true, message: 'Whitelist updated' };
+    } catch (error) {
+      return { success: false, message: `Error updating whitelist: ${error}` };
+    }
+  }
+
+  async isWhitelistEnabled(): Promise<boolean> {
+    try {
+      const config = await this.getServerProperties();
+      return config['enforce-whitelist'] === true || config['enforce-whitelist'] === 'true';
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async setWhitelistEnabled(enabled: boolean): Promise<{ success: boolean; message: string }> {
+    try {
+      const config = await this.getServerProperties();
+      config['enforce-whitelist'] = enabled;
+      const result = await this.setServerProperties(config);
+      return result;
+    } catch (error) {
+      return { success: false, message: `Error setting whitelist enabled: ${error}` };
+    }
+  }
+
   private parseValue(value: string): string | number | boolean {
     const trimmed = value.trim();
     if (trimmed === 'true') return true;
