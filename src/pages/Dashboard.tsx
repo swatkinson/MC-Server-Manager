@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ConsolePanel } from '../components/ConsolePanel'
 
 type ServerStatus = 'online' | 'offline' | 'starting' | 'stopping'
 
@@ -77,6 +78,10 @@ export function Dashboard() {
               Settings
             </button>
           </div>
+        </section>
+
+        <section className="card card--full" style={{ minHeight: '500px' }}>
+          <ConsolePanel />
         </section>
       </main>
     </div>
