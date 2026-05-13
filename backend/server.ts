@@ -112,7 +112,7 @@ app.post('/api/console/command', async (req, res) => {
 app.get('/api/config/server-properties', async (req, res) => {
   try {
     const properties = await configManager.getServerProperties();
-    res.json({ properties });
+    res.json(properties);
   } catch (error) {
     res.status(500).json({ error: 'Failed to get server properties' });
   }
@@ -131,7 +131,8 @@ app.post('/api/config/server-properties', async (req, res) => {
 app.get('/api/config/whitelist', async (req, res) => {
   try {
     const entries = await configManager.getWhitelist();
-    res.json({ entries });
+    const enabled = await configManager.isWhitelistEnabled();
+    res.json({ entries, enabled });
   } catch (error) {
     res.status(500).json({ error: 'Failed to get whitelist' });
   }
@@ -139,14 +140,36 @@ app.get('/api/config/whitelist', async (req, res) => {
 
 app.post('/api/config/whitelist', async (req, res) => {
   try {
-    const { uuid, name } = req.body;
-    const result = await configManager.addToWhitelist(uuid, name);
-    if (result.success) {
-      io.emit('whitelist:updated', { action: 'added', uuid, name });
+    const { uuid, name, entries, enabled } = req.body;
+
+    // If entries array is provided, update whitelist with all entries
+    if (entries) {
+      const result = await configManager.setWhitelist(entries);
+      if (result.success) {
+        const whitelistData = { entries, enabled: enabled ?? true };
+        io.emit('whitelist:updated', whitelistData);
+      }
+      res.json(result);
+    } else if (enabled !== undefined) {
+      // Toggle whitelist enabled state
+      const result = await configManager.setWhitelistEnabled(enabled);
+      if (result.success) {
+        const entries = await configManager.getWhitelist();
+        const whitelistData = { entries, enabled };
+        io.emit('whitelist:updated', whitelistData);
+      }
+      res.json(result);
+    } else {
+      // Add single player
+      const result = await configManager.addToWhitelist(uuid, name);
+      if (result.success) {
+        const entries = await configManager.getWhitelist();
+        io.emit('whitelist:updated', { entries, enabled: await configManager.isWhitelistEnabled() });
+      }
+      res.json(result);
     }
-    res.json(result);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to add to whitelist' });
+    res.status(500).json({ error: 'Failed to update whitelist' });
   }
 });
 
@@ -154,7 +177,8 @@ app.delete('/api/config/whitelist/:uuid', async (req, res) => {
   try {
     const result = await configManager.removeFromWhitelist(req.params.uuid);
     if (result.success) {
-      io.emit('whitelist:updated', { action: 'removed', uuid: req.params.uuid });
+      const entries = await configManager.getWhitelist();
+      io.emit('whitelist:updated', { entries, enabled: await configManager.isWhitelistEnabled() });
     }
     res.json(result);
   } catch (error) {
