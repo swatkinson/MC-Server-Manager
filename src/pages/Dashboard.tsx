@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import { ConsolePanel } from '../components/ConsolePanel'
+import { PlayerList } from '../components/PlayerList'
+import { MetricsGauges } from '../components/MetricsGauges'
+import { useMetrics } from '../hooks/useMetrics'
 
 type ServerStatus = 'online' | 'offline' | 'starting' | 'stopping'
 
@@ -12,6 +15,7 @@ const STATUS_COLORS: Record<ServerStatus, string> = {
 
 export function Dashboard() {
   const [status, setStatus] = useState<ServerStatus>('offline')
+  const { metrics, loading, error } = useMetrics()
 
   return (
     <div className="dashboard">
@@ -21,6 +25,11 @@ export function Dashboard() {
       </header>
 
       <main className="main">
+        <section className="card card--full">
+          <h2>System Metrics</h2>
+          <MetricsGauges metrics={metrics} loading={loading} error={error} />
+        </section>
+
         <section className="card">
           <h2>Server Status</h2>
           <div className="status-indicator">
@@ -71,13 +80,15 @@ export function Dashboard() {
             <button className="btn btn--blue" onClick={() => alert('Logs coming in Phase 4')}>
               View Logs
             </button>
-            <button className="btn btn--purple" onClick={() => alert('Player list coming in Phase 3')}>
-              Player List
-            </button>
-            <button className="btn btn--gray" onClick={() => alert('Settings coming in Phase 5')}>
+            <button className="btn btn--purple" onClick={() => alert('Settings coming in Phase 5')}>
               Settings
             </button>
           </div>
+        </section>
+
+        <section className="card card--full">
+          <h2>Player List</h2>
+          <PlayerList />
         </section>
 
         <section className="card card--full" style={{ minHeight: '500px' }}>

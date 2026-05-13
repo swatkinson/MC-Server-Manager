@@ -3,3 +3,5 @@ export { useServerSocket } from './useServerSocket';
 export { useServerStatus } from './useServerStatus';
 export { useConsoleLogs } from './useConsoleLogs';
 export { useConsoleCommand } from './useConsoleCommand';
+export { usePlayerList } from './usePlayerList';
+export { useMetrics } from './useMetrics';
