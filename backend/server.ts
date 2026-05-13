@@ -192,9 +192,7 @@ app.delete('/api/config/whitelist/:uuid', async (req, res) => {
 app.post('/api/server/world-backup', async (req, res) => {
   try {
     const minecraftDir = process.env.MINECRAFT_DIR || `${process.env.HOME}/MinecraftServer`;
-    const worldPath = require('path').join(minecraftDir, 'world');
-    const archiver = require('archiver');
-    const fs = require('fs');
+    const worldPath = path.join(minecraftDir, 'world');
 
     // Set response headers
     res.setHeader('Content-Type', 'application/gzip');
