@@ -21,10 +21,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
+      - name: Build frontend
+        run: npm run build:frontend
 
-      - name: Deploy
+      - name: Build backend
+        run: npm run build:backend
+
+      - name: Deploy frontend
         run: |
           mkdir -p /var/www/mc-server-manager
           rsync -av --delete dist/ /var/www/mc-server-manager/
+
+      - name: Deploy backend
+        run: |
+          mkdir -p /opt/mc-server-manager
+          rsync -av backend/dist/ /opt/mc-server-manager/
+          rsync -av node_modules/ /opt/mc-server-manager/node_modules/
+          rsync -av package.json package-lock.json /opt/mc-server-manager/
