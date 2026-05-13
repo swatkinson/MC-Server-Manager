@@ -6,6 +6,7 @@
  * Format bytes to human-readable format (B, KB, MB, GB, TB)
  */
 export function formatBytes(bytes: number, decimals: number = 2): string {
+  if (bytes == null) return '0 B';
   if (bytes === 0) return '0 B';
 
   const k = 1024;
@@ -21,6 +22,7 @@ export function formatBytes(bytes: number, decimals: number = 2): string {
  * Format percentage value with proper rounding
  */
 export function formatPercentage(value: number, decimals: number = 1): string {
+  if (value == null) return '0%';
   return Math.min(100, Math.max(0, parseFloat(value.toFixed(decimals)))) + '%';
 }
 
