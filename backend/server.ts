@@ -30,7 +30,7 @@ app.use(express.json());
 app.use(cors());
 
 if (NODE_ENV === 'production') {
-  const staticPath = path.join(path.dirname(new URL(import.meta.url).pathname), '../dist');
+  const staticPath = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
   app.use(express.static(staticPath, { index: false }));
 }
 
@@ -277,7 +277,7 @@ io.on('connection', (socket) => {
 
 if (NODE_ENV === 'production') {
   app.get('*', (_req: Request, res: Response) => {
-    const indexPath = path.join(path.dirname(new URL(import.meta.url).pathname), '../dist/index.html');
+    const indexPath = path.join(path.dirname(new URL(import.meta.url).pathname), '../index.html');
     res.sendFile(indexPath);
   });
 }
