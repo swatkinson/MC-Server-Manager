@@ -6,7 +6,7 @@ Context and instructions for AI agents (Claude, Copilot, etc.) working in this r
 
 ## Project Overview
 
-MC Server Manager is a self-hosted web dashboard for managing a Minecraft server. It is built with React + TanStack Router and runs on the same Ubuntu Server VM as the Minecraft server. The frontend is served as static files via nginx. CI/CD is handled by GitHub Actions — every push to `main` auto-deploys to the server via rsync over SSH.
+MC Server Manager is a self-hosted web dashboard for managing a Minecraft server. It is built with React + TanStack Router and Express + Socket.IO, all served from a single Node.js process running on the same Ubuntu Server VM as the Minecraft server. CI/CD is handled by GitHub Actions — every push to `main` auto-deploys to the server via a self-hosted runner that rsyncs the build into `~/mc-server-manager` and restarts the `mc-server-manager` systemd unit.
 
 This is a personal project with one developer. Keep things simple and pragmatic.
 
@@ -25,11 +25,12 @@ This is a personal project with one developer. Keep things simple and pragmatic.
 
 - **React 18 + TypeScript** — UI
 - **TanStack Router v1** — client-side routing
-- **TanStack Query** — server data fetching (to be added in Phase 2)
-- **Vite** — build tool
+- **Express + Socket.IO** — backend API and realtime events
+- **Vite** — frontend build tool
+- **tsx / tsc** — backend dev runtime / production compile
 - **Plain CSS** — no CSS framework (keep it lean)
-- **GitHub Actions** — CI/CD
-- **nginx** — static file serving on Ubuntu Server
+- **GitHub Actions** — CI/CD (self-hosted runner)
+- **systemd** — runs the Node process on the Ubuntu host (port 80 via `CAP_NET_BIND_SERVICE`)
 
 ---
 
@@ -43,6 +44,11 @@ src/
   utils/        # Utility/helper functions
   styles/       # CSS files
   types/        # Shared TypeScript type definitions
+backend/
+  server.ts     # Express + Socket.IO entry point
+  config.ts     # Centralized env-driven config and derived paths
+  services/     # ServerManager, ConsoleManager, ConfigManager, MetricsCollector, PlayerManager
+  types/        # Shared backend types (kept in sync with src/types/api.ts)
 .github/
   workflows/    # GitHub Actions workflow files
 ```
