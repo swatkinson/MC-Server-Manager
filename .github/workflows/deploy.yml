@@ -26,9 +26,9 @@ jobs:
 
       - name: Deploy to server
         run: |
-          mkdir -p /opt/mc-server-manager
-          rsync -av --delete dist/ /opt/mc-server-manager/dist/
-          rsync -av --delete package.json package-lock.json /opt/mc-server-manager/
+          mkdir -p ~/mc-server-manager
+          rsync -av --delete dist/ ~/mc-server-manager/dist/
+          rsync -av --delete package.json package-lock.json ~/mc-server-manager/
 
       - name: Restart service
         run: |
