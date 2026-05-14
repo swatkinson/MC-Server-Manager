@@ -12,9 +12,11 @@ RestartSec=5s
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=mc-server-manager
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
 Environment="NODE_ENV=production"
-Environment="PORT=3001"
+Environment="PORT=80"
 Environment="MINECRAFT_DIR=/home/swatkinson/MinecraftServer"
 
 [Install]

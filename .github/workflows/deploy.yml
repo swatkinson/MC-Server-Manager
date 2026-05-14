@@ -28,7 +28,7 @@ jobs:
         run: |
           mkdir -p ~/mc-server-manager
           rsync -av --delete dist/ ~/mc-server-manager/dist/
-          rsync -av --delete package.json package-lock.json ~/mc-server-manager/
+          rsync -av --delete package.json package-lock.json mc-server-manager.service ~/mc-server-manager/
 
       - name: Install production dependencies
         run: |
