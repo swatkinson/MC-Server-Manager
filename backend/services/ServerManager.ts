@@ -1,30 +1,33 @@
-import { exec, execFile, spawn } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { ServerStatus } from '../types/index.js';
 import * as fs from 'fs/promises';
-import * as path from 'path';
+import { ServerStatus } from '../types/index.js';
+import { config } from '../config.js';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+type ActionResult = { success: boolean; message: string };
 
 export class ServerManager {
-  private minecraftDir = process.env.MINECRAFT_DIR || `${process.env.HOME}/MinecraftServer`;
   private isTransitioning = false;
 
   async getStatus(): Promise<ServerStatus> {
     try {
-      const isRunning = await this.isServerRunning();
-      const config = await this.readServerProperties();
-      const uptime = await this.getUptime();
+      const [isRunning, properties, uptimeSeconds] = await Promise.all([
+        this.isServerRunning(),
+        this.readServerProperties(),
+        this.getUptimeSeconds(),
+      ]);
 
       return {
         status: isRunning ? 'online' : 'offline',
-        uptime,
-        version: config.serverVersion || '1.20.1',
-        motd: config.motd || 'A Minecraft Server',
-        ip: config.ip || 'localhost',
+        uptime: isRunning ? uptimeSeconds : 0,
+        version: (properties['server-version'] as string) || '1.20.1',
+        motd: (properties['motd'] as string) || 'A Minecraft Server',
+        ip: (properties['server-ip'] as string) || 'localhost',
         players: {
           current: 0,
-          max: parseInt(config.maxPlayers as string) || 20,
+          max: Number(properties['max-players']) || 20,
         },
       };
     } catch (error) {
@@ -40,60 +43,71 @@ export class ServerManager {
     }
   }
 
-  async start(): Promise<{ success: boolean; message: string }> {
+  async start(): Promise<ActionResult> {
     if (this.isTransitioning) {
       return { success: false, message: 'Server is already transitioning' };
     }
 
     this.isTransitioning = true;
     try {
-      const isRunning = await this.isServerRunning();
-      if (isRunning) {
+      if (await this.isServerRunning()) {
         return { success: false, message: 'Server is already running' };
       }
 
-      await execAsync(`cd ${this.minecraftDir} && ./start.sh`, { timeout: 30000 });
+      await execFileAsync(config.startScript, [], {
+        cwd: config.minecraftDir,
+        timeout: 30_000,
+      });
       return { success: true, message: 'Server started' };
     } catch (error) {
-      return { success: false, message: `Failed to start server: ${error}` };
+      console.error('Error starting server:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      return { success: false, message: `Failed to start server: ${message}` };
     } finally {
       this.isTransitioning = false;
     }
   }
 
-  async stop(): Promise<{ success: boolean; message: string }> {
+  async stop(): Promise<ActionResult> {
     if (this.isTransitioning) {
       return { success: false, message: 'Server is already transitioning' };
     }
 
     this.isTransitioning = true;
     try {
-      const isRunning = await this.isServerRunning();
-      if (!isRunning) {
+      if (!(await this.isServerRunning())) {
         return { success: false, message: 'Server is not running' };
       }
 
       await this.sendConsoleCommand('say Server is shutting down...');
       await new Promise((resolve) => setTimeout(resolve, 2000));
+      await this.sendConsoleCommand('stop');
 
-      await execAsync(`pkill -f 'java.*minecraft'`, { timeout: 30000 });
+      await this.waitForShutdown(20_000);
+
+      if (await this.isServerRunning()) {
+        await execFileAsync('pkill', ['-f', 'java.*minecraft'], { timeout: 10_000 });
+      }
       return { success: true, message: 'Server stopped' };
     } catch (error) {
-      return { success: false, message: `Failed to stop server: ${error}` };
+      console.error('Error stopping server:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      return { success: false, message: `Failed to stop server: ${message}` };
     } finally {
       this.isTransitioning = false;
     }
   }
 
-  async restart(): Promise<{ success: boolean; message: string }> {
-    await this.stop();
+  async restart(): Promise<ActionResult> {
+    const stopResult = await this.stop();
+    if (!stopResult.success) return stopResult;
     await new Promise((resolve) => setTimeout(resolve, 3000));
     return this.start();
   }
 
   async sendConsoleCommand(command: string): Promise<void> {
     try {
-      execFile('screen', ['-S', 'minecraft', '-X', 'stuff', `${command}\n`]);
+      await execFileAsync('screen', ['-S', config.screenSession, '-X', 'stuff', `${command}\n`]);
     } catch (error) {
       console.error('Error sending console command:', error);
     }
@@ -101,36 +115,42 @@ export class ServerManager {
 
   private async isServerRunning(): Promise<boolean> {
     try {
-      const { stdout } = await execAsync('pgrep -f "java.*minecraft" | wc -l');
-      return parseInt(stdout.trim()) > 0;
+      await execFileAsync('pgrep', ['-f', 'java.*minecraft']);
+      return true;
     } catch {
       return false;
     }
   }
 
-  private async getUptime(): Promise<number> {
+  private async waitForShutdown(timeoutMs: number): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (!(await this.isServerRunning())) return;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+
+  private async getUptimeSeconds(): Promise<number> {
     try {
-      const result = await fs.stat(path.join(this.minecraftDir, 'world'));
-      return Date.now() - result.mtimeMs;
+      const stats = await fs.stat(config.worldPath);
+      return Math.max(0, Math.floor((Date.now() - stats.mtimeMs) / 1000));
     } catch {
       return 0;
     }
   }
 
-  private async readServerProperties(): Promise<Record<string, any>> {
+  private async readServerProperties(): Promise<Record<string, string>> {
     try {
-      const content = await fs.readFile(
-        path.join(this.minecraftDir, 'server.properties'),
-        'utf-8'
-      );
-      const config: Record<string, any> = {};
-      content.split('\n').forEach((line) => {
-        const [key, value] = line.split('=');
-        if (key && !key.startsWith('#')) {
-          config[key] = value;
-        }
-      });
-      return config;
+      const content = await fs.readFile(config.serverPropertiesPath, 'utf-8');
+      const properties: Record<string, string> = {};
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eq = trimmed.indexOf('=');
+        if (eq <= 0) continue;
+        properties[trimmed.slice(0, eq)] = trimmed.slice(eq + 1);
+      }
+      return properties;
     } catch {
       return {};
     }
