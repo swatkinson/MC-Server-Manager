@@ -37,4 +37,4 @@ jobs:
       - name: Verify service is running
         run: |
           sleep 2
-          sudo systemctl is-active --quiet mc-server-manager && echo "Service running" || exit 1
+          systemctl is-active --quiet mc-server-manager && echo "Service running" || exit 1
