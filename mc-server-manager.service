@@ -4,9 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-User=www-data
-WorkingDirectory=/opt/mc-server-manager
-ExecStart=/usr/bin/node /opt/mc-server-manager/dist/backend/server.js
+User=ubuntu
+WorkingDirectory=/home/ubuntu/mc-server-manager
+ExecStart=/usr/bin/node /home/ubuntu/mc-server-manager/dist/backend/server.js
 Restart=always
 RestartSec=5s
 StandardOutput=journal
@@ -14,8 +14,8 @@ StandardError=journal
 SyslogIdentifier=mc-server-manager
 
 Environment="NODE_ENV=production"
-Environment="PORT=80"
-Environment="MINECRAFT_DIR=/home/minecraft/server"
+Environment="PORT=3001"
+Environment="MINECRAFT_DIR=/home/ubuntu/MinecraftServer"
 
 [Install]
 WantedBy=multi-user.target
