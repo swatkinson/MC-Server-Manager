@@ -1,4 +1,5 @@
 import * as fs from 'fs/promises';
+import { watch } from 'fs';
 import * as path from 'path';
 import { LogLine } from '../types/index.js';
 import { execFile } from 'child_process';
@@ -43,13 +44,11 @@ export class ConsoleManager {
   }
 
   async watchLogs(callback: (line: LogLine) => void): Promise<void> {
-    let watcher: fs.FSWatcher | null = null;
-
     try {
       const content = await fs.readFile(this.logPath, 'utf-8');
       this.lastReadPosition = content.length;
 
-      watcher = fs.watch(this.logPath, async (eventType) => {
+      watch(this.logPath, async (eventType: string) => {
         if (eventType === 'change') {
           try {
             const content = await fs.readFile(this.logPath, 'utf-8');

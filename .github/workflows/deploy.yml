@@ -21,10 +21,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
+      - name: Build frontend and backend
+        run: npm run build:prod
 
-      - name: Deploy
+      - name: Deploy to server
         run: |
-          mkdir -p /var/www/mc-server-manager
-          rsync -av --delete dist/ /var/www/mc-server-manager/
+          mkdir -p /opt/mc-server-manager
+          rsync -av --delete dist/ /opt/mc-server-manager/dist/
+          rsync -av --delete package.json package-lock.json /opt/mc-server-manager/
+
+      - name: Restart service
+        run: |
+          sudo systemctl restart mc-server-manager
+
+      - name: Verify service is running
+        run: |
+          sleep 2
+          sudo systemctl is-active --quiet mc-server-manager && echo "Service running" || exit 1
