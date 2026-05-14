@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -18,6 +18,7 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3001;
+const NODE_ENV = process.env.NODE_ENV || 'development';
 
 const serverManager = new ServerManager();
 const metricsCollector = new MetricsCollector();
@@ -28,6 +29,11 @@ const playerManager = new PlayerManager();
 app.use(express.json());
 app.use(cors());
 
+if (NODE_ENV === 'production') {
+  const staticPath = path.join(path.dirname(new URL(import.meta.url).pathname), '../dist');
+  app.use(express.static(staticPath, { index: false }));
+}
+
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
@@ -36,11 +42,11 @@ io.on('connection', (socket) => {
   });
 });
 
-app.get('/api/health', (req, res) => {
+app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok' });
 });
 
-app.get('/api/server/status', async (req, res) => {
+app.get('/api/server/status', async (_req: Request, res: Response) => {
   try {
     const status = await serverManager.getStatus();
     res.json(status);
@@ -49,7 +55,7 @@ app.get('/api/server/status', async (req, res) => {
   }
 });
 
-app.post('/api/server/start', async (req, res) => {
+app.post('/api/server/start', async (_req: Request, res: Response) => {
   try {
     const result = await serverManager.start();
     io.emit('server:status:changed', result);
@@ -59,7 +65,7 @@ app.post('/api/server/start', async (req, res) => {
   }
 });
 
-app.post('/api/server/stop', async (req, res) => {
+app.post('/api/server/stop', async (_req: Request, res: Response) => {
   try {
     const result = await serverManager.stop();
     io.emit('server:status:changed', result);
@@ -69,7 +75,7 @@ app.post('/api/server/stop', async (req, res) => {
   }
 });
 
-app.post('/api/server/restart', async (req, res) => {
+app.post('/api/server/restart', async (_req: Request, res: Response) => {
   try {
     const result = await serverManager.restart();
     io.emit('server:status:changed', result);
@@ -79,7 +85,7 @@ app.post('/api/server/restart', async (req, res) => {
   }
 });
 
-app.get('/api/metrics', async (req, res) => {
+app.get('/api/metrics', async (_req: Request, res: Response) => {
   try {
     const metrics = await metricsCollector.getMetrics();
     res.json(metrics);
@@ -88,7 +94,7 @@ app.get('/api/metrics', async (req, res) => {
   }
 });
 
-app.get('/api/console/logs', async (req, res) => {
+app.get('/api/console/logs', async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 50;
     const logs = await consoleManager.getLogs(limit);
@@ -98,7 +104,7 @@ app.get('/api/console/logs', async (req, res) => {
   }
 });
 
-app.post('/api/console/command', async (req, res) => {
+app.post('/api/console/command', async (req: Request, res: Response) => {
   try {
     const { command } = req.body;
     if (!command) {
@@ -112,7 +118,7 @@ app.post('/api/console/command', async (req, res) => {
   }
 });
 
-app.get('/api/config/server-properties', async (req, res) => {
+app.get('/api/config/server-properties', async (_req: Request, res: Response) => {
   try {
     const properties = await configManager.getServerProperties();
     res.json(properties);
@@ -121,7 +127,7 @@ app.get('/api/config/server-properties', async (req, res) => {
   }
 });
 
-app.post('/api/config/server-properties', async (req, res) => {
+app.post('/api/config/server-properties', async (req: Request, res: Response) => {
   try {
     const result = await configManager.setServerProperties(req.body.properties);
     io.emit('config:updated', result);
@@ -131,7 +137,7 @@ app.post('/api/config/server-properties', async (req, res) => {
   }
 });
 
-app.get('/api/config/whitelist', async (req, res) => {
+app.get('/api/config/whitelist', async (_req: Request, res: Response) => {
   try {
     const entries = await configManager.getWhitelist();
     const enabled = await configManager.isWhitelistEnabled();
@@ -141,7 +147,7 @@ app.get('/api/config/whitelist', async (req, res) => {
   }
 });
 
-app.post('/api/config/whitelist', async (req, res) => {
+app.post('/api/config/whitelist', async (req: Request, res: Response) => {
   try {
     const { uuid, name, entries, enabled } = req.body;
 
@@ -176,9 +182,10 @@ app.post('/api/config/whitelist', async (req, res) => {
   }
 });
 
-app.delete('/api/config/whitelist/:uuid', async (req, res) => {
+app.delete('/api/config/whitelist/:uuid', async (req: Request, res: Response) => {
   try {
-    const result = await configManager.removeFromWhitelist(req.params.uuid);
+    const uuid = Array.isArray(req.params.uuid) ? req.params.uuid[0] : req.params.uuid;
+    const result = await configManager.removeFromWhitelist(uuid);
     if (result.success) {
       const entries = await configManager.getWhitelist();
       io.emit('whitelist:updated', { entries, enabled: await configManager.isWhitelistEnabled() });
@@ -189,7 +196,7 @@ app.delete('/api/config/whitelist/:uuid', async (req, res) => {
   }
 });
 
-app.post('/api/server/world-backup', async (req, res) => {
+app.post('/api/server/world-backup', async (_req: Request, res: Response) => {
   try {
     const minecraftDir = process.env.MINECRAFT_DIR || `${process.env.HOME}/MinecraftServer`;
     const worldPath = path.join(minecraftDir, 'world');
@@ -227,7 +234,7 @@ app.post('/api/server/world-backup', async (req, res) => {
   }
 });
 
-app.get('/api/players', async (req, res) => {
+app.get('/api/players', async (_req: Request, res: Response) => {
   try {
     const players = await playerManager.getPlayerList();
     res.json({ players });
@@ -268,6 +275,13 @@ io.on('connection', (socket) => {
   }
 });
 
+if (NODE_ENV === 'production') {
+  app.get('*', (_req: Request, res: Response) => {
+    const indexPath = path.join(path.dirname(new URL(import.meta.url).pathname), '../dist/index.html');
+    res.sendFile(indexPath);
+  });
+}
+
 server.listen(PORT, () => {
-  console.log(`MC Server Manager backend running on port ${PORT}`);
+  console.log(`MC Server Manager running on port ${PORT} (${NODE_ENV})`);
 });
