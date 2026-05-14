@@ -1,59 +1,71 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-export function useServerSocket() {
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [connected, setConnected] = useState(false);
+type Unsubscribe = () => void;
+type SocketHandler<T> = (data: T) => void;
+
+let sharedSocket: Socket | null = null;
+let refCount = 0;
+
+function getSocket(): Socket {
+  if (sharedSocket) return sharedSocket;
+
+  const socketUrl = import.meta.env.PROD ? window.location.origin : 'http://localhost:3001';
+  sharedSocket = io(socketUrl, {
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    reconnectionAttempts: Infinity,
+  });
+  return sharedSocket;
+}
+
+export interface UseServerSocketResult {
+  socket: Socket;
+  connected: boolean;
+  emit: (event: string, data?: unknown) => void;
+  on: <T = unknown>(event: string, callback: SocketHandler<T>) => Unsubscribe;
+}
+
+export function useServerSocket(): UseServerSocketResult {
+  const socketRef = useRef<Socket>(getSocket());
+  const [connected, setConnected] = useState<boolean>(socketRef.current.connected);
 
   useEffect(() => {
-    const socketUrl =
-      import.meta.env.PROD
-        ? window.location.origin
-        : 'http://localhost:3001';
+    refCount += 1;
+    const socket = socketRef.current;
 
-    const newSocket = io(socketUrl, {
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: Infinity,
-    });
+    const handleConnect = () => setConnected(true);
+    const handleDisconnect = () => setConnected(false);
 
-    newSocket.on('connect', () => {
-      console.log('Socket connected');
-      setConnected(true);
-    });
-
-    newSocket.on('disconnect', () => {
-      console.log('Socket disconnected');
-      setConnected(false);
-    });
-
-    setSocket(newSocket);
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
 
     return () => {
-      newSocket.close();
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+      refCount -= 1;
+      if (refCount === 0 && sharedSocket) {
+        sharedSocket.close();
+        sharedSocket = null;
+      }
     };
   }, []);
 
-  const emit = useCallback(
-    (event: string, data?: any) => {
-      if (socket && connected) {
-        socket.emit(event, data);
-      }
-    },
-    [socket, connected]
-  );
+  const emit = useCallback((event: string, data?: unknown) => {
+    if (socketRef.current.connected) {
+      socketRef.current.emit(event, data);
+    }
+  }, []);
 
   const on = useCallback(
-    (event: string, callback: (data: any) => void) => {
-      if (socket) {
-        socket.on(event, callback);
-        return () => socket.off(event, callback);
-      }
-      return undefined;
+    <T = unknown>(event: string, callback: SocketHandler<T>): Unsubscribe => {
+      const socket = socketRef.current;
+      socket.on(event, callback as (...args: unknown[]) => void);
+      return () => socket.off(event, callback as (...args: unknown[]) => void);
     },
-    [socket]
+    [],
   );
 
-  return { socket, connected, emit, on };
+  return { socket: socketRef.current, connected, emit, on };
 }

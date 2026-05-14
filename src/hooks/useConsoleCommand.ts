@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ConsoleCommandResponse } from '../types/api';
 import { apiPost } from './useApi';
 import { useServerSocket } from './useServerSocket';
@@ -23,14 +23,12 @@ export function useConsoleCommand() {
       setError(null);
       setLastOutput('');
 
-      const response = await apiPost<ConsoleCommandResponse>(
-        '/api/console/command',
-        { command }
-      );
+      const response = await apiPost<ConsoleCommandResponse>('/api/console/command', {
+        command,
+      });
 
       if (response.success) {
         setLastOutput(response.output);
-        // Add to history
         setCommandHistory((prev) => [...prev, command]);
         setHistoryIndex(-1);
       } else {
@@ -45,36 +43,45 @@ export function useConsoleCommand() {
     }
   }, []);
 
-  const getPreviousCommand = useCallback((currentIndex: number) => {
-    const newIndex = currentIndex + 1;
-    if (newIndex < commandHistory.length) {
-      setHistoryIndex(newIndex);
-      return commandHistory[commandHistory.length - 1 - newIndex];
-    }
-    return '';
-  }, [commandHistory]);
-
-  const getNextCommand = useCallback((currentIndex: number) => {
-    const newIndex = currentIndex - 1;
-    if (newIndex >= 0) {
-      setHistoryIndex(newIndex);
-      return commandHistory[commandHistory.length - 1 - newIndex];
-    } else if (newIndex === -1) {
-      setHistoryIndex(-1);
+  const getPreviousCommand = useCallback(
+    (currentIndex: number) => {
+      const newIndex = currentIndex + 1;
+      if (newIndex < commandHistory.length) {
+        setHistoryIndex(newIndex);
+        return commandHistory[commandHistory.length - 1 - newIndex];
+      }
       return '';
-    }
-    return '';
-  }, [commandHistory]);
+    },
+    [commandHistory],
+  );
+
+  const getNextCommand = useCallback(
+    (currentIndex: number) => {
+      const newIndex = currentIndex - 1;
+      if (newIndex >= 0) {
+        setHistoryIndex(newIndex);
+        return commandHistory[commandHistory.length - 1 - newIndex];
+      }
+      if (newIndex === -1) {
+        setHistoryIndex(-1);
+      }
+      return '';
+    },
+    [commandHistory],
+  );
 
   const resetHistory = useCallback(() => {
     setHistoryIndex(-1);
   }, []);
 
-  // Listen for command execution events from WebSocket
-  // (useful if commands are executed from other clients)
-  on('console:command:executed', (data: { command: string; output: string }) => {
-    setLastOutput(data.output);
-  });
+  useEffect(() => {
+    const unsubscribe = on('console:command:executed', (data: { command: string; output: string }) => {
+      setLastOutput(data.output);
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, [on]);
 
   return {
     executeCommand,
