@@ -1,7 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { ConsoleCommandResponse } from '../types/api';
 import { apiPost } from './useApi';
-import { useServerSocket } from './useServerSocket';
 import { useToasts } from '../context/ToastContext';
 
 export function useConsoleCommand() {
@@ -9,9 +8,7 @@ export function useConsoleCommand() {
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastOutput, setLastOutput] = useState<string>('');
 
-  const { on } = useServerSocket();
   const { push } = useToasts();
 
   const executeCommand = useCallback(async (command: string) => {
@@ -23,14 +20,12 @@ export function useConsoleCommand() {
     try {
       setLoading(true);
       setError(null);
-      setLastOutput('');
 
       const response = await apiPost<ConsoleCommandResponse>('/api/console/command', {
         command,
       });
 
       if (response.success) {
-        setLastOutput(response.output);
         setCommandHistory((prev) => [...prev, command]);
         setHistoryIndex(-1);
       } else {
@@ -44,7 +39,6 @@ export function useConsoleCommand() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to execute command';
       setError(errorMessage);
-      setLastOutput('');
       push({
         kind: 'error',
         title: 'Console command failed',
@@ -86,15 +80,6 @@ export function useConsoleCommand() {
     setHistoryIndex(-1);
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = on('console:command:executed', (data: { command: string; output: string }) => {
-      setLastOutput(data.output);
-    });
-    return () => {
-      unsubscribe?.();
-    };
-  }, [on]);
-
   return {
     executeCommand,
     getPreviousCommand,
@@ -102,7 +87,6 @@ export function useConsoleCommand() {
     resetHistory,
     loading,
     error,
-    lastOutput,
     historyLength: commandHistory.length,
   };
 }

@@ -8,7 +8,6 @@ interface ConsoleInputProps {
   loading: boolean;
   historyLength: number;
   error?: string | null;
-  lastOutput?: string;
 }
 
 export function ConsoleInput({
@@ -19,11 +18,9 @@ export function ConsoleInput({
   loading,
   historyLength,
   error,
-  lastOutput,
 }: ConsoleInputProps) {
   const [input, setInput] = useState('');
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [showOutput, setShowOutput] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -33,9 +30,6 @@ export function ConsoleInput({
       setInput('');
       setHistoryIndex(-1);
       onResetHistory();
-      setShowOutput(true);
-      // Auto-hide output after 10 seconds
-      setTimeout(() => setShowOutput(false), 10000);
     }
   };
 
@@ -96,15 +90,6 @@ export function ConsoleInput({
       {error && (
         <div className="console-input__error-message">
           <span>Error: {error}</span>
-        </div>
-      )}
-
-      {showOutput && lastOutput && (
-        <div className="console-input__output">
-          <div className="console-input__output-label">Output:</div>
-          <div className="console-input__output-text">
-            {lastOutput}
-          </div>
         </div>
       )}
 

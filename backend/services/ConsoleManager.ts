@@ -86,7 +86,7 @@ export class ConsoleManager {
     }
   }
 
-  async executeCommand(command: string): Promise<string> {
+  async executeCommand(command: string): Promise<void> {
     if (!isValidCommand(command)) {
       throw new Error('Invalid command');
     }
@@ -100,11 +100,6 @@ export class ConsoleManager {
         'stuff',
         `${trimmed}\n`,
       ]);
-
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      const logs = await this.getLogs(5);
-      return logs.map((log) => log.message).join('\n');
     } catch (error) {
       console.error('Error executing command:', error);
       const message = error instanceof Error ? error.message : String(error);
