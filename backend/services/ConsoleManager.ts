@@ -160,15 +160,25 @@ export class ConsoleManager {
   private parseLine(line: string): LogLine | null {
     if (!line.trim()) return null;
 
-    const timestamp = line.substring(0, 12);
+    // Standard Minecraft log format: "[HH:MM:SS] [Source/LEVEL]: Message"
+    const match = line.match(/^\[(\d{1,2}:\d{2}:\d{2})\]\s*\[([^\]]*)\]:\s*(.*)$/);
+    if (match) {
+      const [, timestamp, source, message] = match;
+      const sourceLevel = source.split('/').pop()?.toUpperCase() ?? '';
+      let level: LogLine['level'] = 'INFO';
+      if (sourceLevel === 'ERROR' || sourceLevel === 'WARN' || sourceLevel === 'DEBUG') {
+        level = sourceLevel;
+      }
+      return { timestamp, level, message };
+    }
 
+    // Fallback for non-standard lines: keep the whole line as the message.
     let level: LogLine['level'] = 'INFO';
-    if (line.includes('[ERROR]') || line.includes('ERROR')) level = 'ERROR';
-    else if (line.includes('[WARN]') || line.includes('WARN')) level = 'WARN';
-    else if (line.includes('[DEBUG]') || line.includes('DEBUG')) level = 'DEBUG';
+    if (line.includes('ERROR')) level = 'ERROR';
+    else if (line.includes('WARN')) level = 'WARN';
+    else if (line.includes('DEBUG')) level = 'DEBUG';
 
-    const message = line.substring(13).trim();
-    return { timestamp, level, message };
+    return { timestamp: '', level, message: line.trim() };
   }
 
   private checkForPlayerEvents(logLine: LogLine): void {
