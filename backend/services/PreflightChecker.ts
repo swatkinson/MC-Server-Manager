@@ -181,7 +181,7 @@ export async function runPreflightChecks(): Promise<PreflightCheck[]> {
     checkBinary('bin-screen', 'screen', 'error', 'send console commands and detach the server'),
     checkBinary('bin-pgrep', 'pgrep', 'error', 'detect whether the server process is running'),
     checkBinary('bin-pkill', 'pkill', 'error', 'force-stop the server if it does not respond'),
-    checkBinary('bin-jcmd', 'jcmd', 'warn', 'read JVM heap metrics (gauge will show zeros without it)'),
+    checkBinary('bin-jstat', 'jstat', 'warn', 'read JVM heap metrics (gauge will fall back to system RAM only without it)'),
     checkScreenSessionRunning(),
   ]);
 }
