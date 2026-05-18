@@ -1,5 +1,4 @@
 import * as fs from 'fs/promises';
-import { watch, FSWatcher } from 'fs';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { LogLine, Player } from '../types/index.js';
@@ -9,6 +8,7 @@ import { config } from '../config.js';
 const execFileAsync = promisify(execFile);
 
 const COMMAND_REGEX = /^[A-Za-z0-9 _.\-:/@!?'"=,()\[\]{}+*]+$/;
+const LOG_POLL_INTERVAL_MS = 1000;
 
 export function isValidCommand(command: string): boolean {
   if (!command || typeof command !== 'string') return false;
@@ -21,9 +21,11 @@ type PlayersCallback = (players: Player[]) => void;
 
 export class ConsoleManager {
   private lastReadPosition = 0;
+  private lastKnownIno: number | null = null;
   private playerManager: PlayerManager | null = null;
   private onPlayersUpdate: PlayersCallback | null = null;
-  private watcher: FSWatcher | null = null;
+  private pollTimer: NodeJS.Timeout | null = null;
+  private polling = false;
 
   async getLogs(limit: number = 50): Promise<LogLine[]> {
     const bounded = Math.max(1, Math.min(limit, config.maxConsoleLogLimit));
@@ -51,45 +53,37 @@ export class ConsoleManager {
   }
 
   async watchLogs(callback: LineCallback): Promise<void> {
-    if (this.watcher) return;
+    if (this.pollTimer) return;
 
+    // Seed position from the current end of file so we don't replay history.
+    // If the file doesn't exist yet, the poller will pick it up when it appears.
     try {
-      const content = await fs.readFile(config.logPath, 'utf-8').catch(() => '');
-      this.lastReadPosition = content.length;
-    } catch (error) {
-      console.error('Error initializing log watcher:', error);
+      const stat = await fs.stat(config.logPath);
+      this.lastReadPosition = stat.size;
+      this.lastKnownIno = stat.ino;
+    } catch {
+      this.lastReadPosition = 0;
+      this.lastKnownIno = null;
     }
 
-    try {
-      this.watcher = watch(config.logPath, async (eventType) => {
-        if (eventType !== 'change') return;
-        try {
-          const content = await fs.readFile(config.logPath, 'utf-8');
-          if (content.length < this.lastReadPosition) {
-            this.lastReadPosition = 0;
-          }
-          const newContent = content.slice(this.lastReadPosition);
-          this.lastReadPosition = content.length;
+    const tick = async () => {
+      if (this.polling) return;
+      this.polling = true;
+      try {
+        await this.pollOnce(callback);
+      } finally {
+        this.polling = false;
+      }
+    };
 
-          for (const line of newContent.split('\n')) {
-            if (!line.trim()) continue;
-            const parsed = this.parseLine(line);
-            if (!parsed) continue;
-            callback(parsed);
-            this.checkForPlayerEvents(parsed);
-          }
-        } catch (error) {
-          console.error('Error reading log change:', error);
-        }
-      });
-    } catch (error) {
-      console.error('Error setting up log watcher:', error);
-    }
+    this.pollTimer = setInterval(tick, LOG_POLL_INTERVAL_MS);
   }
 
   stop(): void {
-    this.watcher?.close();
-    this.watcher = null;
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
   }
 
   async executeCommand(command: string): Promise<string> {
@@ -115,6 +109,56 @@ export class ConsoleManager {
       console.error('Error executing command:', error);
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`Failed to execute command: ${message}`);
+    }
+  }
+
+  private async pollOnce(callback: LineCallback): Promise<void> {
+    let stat;
+    try {
+      stat = await fs.stat(config.logPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        // Log file gone (server stopped / not yet started). Reset so we replay
+        // from the start of the next file when it appears.
+        this.lastReadPosition = 0;
+        this.lastKnownIno = null;
+        return;
+      }
+      throw error;
+    }
+
+    // Detect log rotation: inode changed (Minecraft renames latest.log to
+    // <date>.log.gz and creates a new one on every server start) or file
+    // shrank (truncation). Either way, start over from offset 0.
+    if (this.lastKnownIno !== null && stat.ino !== this.lastKnownIno) {
+      this.lastReadPosition = 0;
+    } else if (stat.size < this.lastReadPosition) {
+      this.lastReadPosition = 0;
+    }
+    this.lastKnownIno = stat.ino;
+
+    if (stat.size === this.lastReadPosition) return;
+
+    let handle;
+    try {
+      handle = await fs.open(config.logPath, 'r');
+      const length = stat.size - this.lastReadPosition;
+      const buffer = Buffer.alloc(length);
+      await handle.read(buffer, 0, length, this.lastReadPosition);
+      this.lastReadPosition = stat.size;
+
+      const lines = buffer.toString('utf-8').split('\n');
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const parsed = this.parseLine(line);
+        if (!parsed) continue;
+        callback(parsed);
+        this.checkForPlayerEvents(parsed);
+      }
+    } catch (error) {
+      console.error('Error reading log delta:', error);
+    } finally {
+      await handle?.close();
     }
   }
 
