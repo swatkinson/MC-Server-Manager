@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useApi, apiPost, apiDelete } from './useApi';
 import { useServerSocket } from './useServerSocket';
+import { useToasts } from '../context/ToastContext';
 
 export interface WhitelistEntry {
   uuid: string;
@@ -30,6 +31,7 @@ export function useWhitelist(): UseWhitelistReturn {
     { manual: false }
   );
   const { on } = useServerSocket();
+  const { push } = useToasts();
   const [updating, setUpdating] = useState(false);
   const [entries, setEntries] = useState<WhitelistEntry[]>([]);
   const [enabled, setEnabled] = useState(false);
@@ -50,44 +52,50 @@ export function useWhitelist(): UseWhitelistReturn {
   }, [on]);
 
   const addPlayer = useCallback(async (uuid: string, name: string) => {
+    setUpdating(true);
     try {
-      setUpdating(true);
       const newEntries = [...entries, { uuid, name }];
       await apiPost('/api/config/whitelist', { entries: newEntries });
       setEntries(newEntries);
     } catch (err) {
-      throw err instanceof Error ? err : new Error('Failed to add player');
+      const message = err instanceof Error ? err.message : 'Failed to add player';
+      push({ kind: 'error', title: 'Could not add player to whitelist', message });
+      throw err instanceof Error ? err : new Error(message);
     } finally {
       setUpdating(false);
     }
-  }, [entries]);
+  }, [entries, push]);
 
   const removePlayer = useCallback(async (uuid: string) => {
+    setUpdating(true);
     try {
-      setUpdating(true);
       await apiDelete(`/api/config/whitelist/${uuid}`);
       setEntries(entries.filter(e => e.uuid !== uuid));
     } catch (err) {
-      throw err instanceof Error ? err : new Error('Failed to remove player');
+      const message = err instanceof Error ? err.message : 'Failed to remove player';
+      push({ kind: 'error', title: 'Could not remove player from whitelist', message });
+      throw err instanceof Error ? err : new Error(message);
     } finally {
       setUpdating(false);
     }
-  }, [entries]);
+  }, [entries, push]);
 
   const toggleWhitelist = useCallback(async (newEnabled: boolean) => {
+    setUpdating(true);
     try {
-      setUpdating(true);
       await apiPost('/api/config/whitelist', {
         entries,
         enabled: newEnabled,
       });
       setEnabled(newEnabled);
     } catch (err) {
-      throw err instanceof Error ? err : new Error('Failed to toggle whitelist');
+      const message = err instanceof Error ? err.message : 'Failed to toggle whitelist';
+      push({ kind: 'error', title: 'Could not toggle whitelist', message });
+      throw err instanceof Error ? err : new Error(message);
     } finally {
       setUpdating(false);
     }
-  }, [entries]);
+  }, [entries, push]);
 
   return {
     entries,

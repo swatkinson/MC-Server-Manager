@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { ServerStatus } from '../types/api';
 import { apiPost } from '../hooks/useApi';
+import { useToasts } from '../context/ToastContext';
 
 interface ControlButtonsProps {
   status: ServerStatus | null;
@@ -8,37 +9,128 @@ interface ControlButtonsProps {
   onStatusChange?: () => void;
 }
 
+type Action = 'start' | 'stop' | 'restart';
+
+const ACTION_LABEL: Record<Action, string> = {
+  start: 'Start',
+  stop: 'Stop',
+  restart: 'Restart',
+};
+
+const EXPECTED_AFTER: Record<Action, 'online' | 'offline'> = {
+  start: 'online',
+  stop: 'offline',
+  restart: 'online',
+};
+
+const VERIFY_TIMEOUT_MS: Record<Action, number> = {
+  start: 30_000,
+  stop: 20_000,
+  restart: 45_000,
+};
+
+interface ActionResult {
+  success: boolean;
+  message?: string;
+}
+
+async function pollServerStatus(): Promise<ServerStatus> {
+  const response = await fetch('/api/server/status');
+  if (!response.ok) throw new Error(`status fetch failed: ${response.statusText}`);
+  return response.json();
+}
+
+async function waitForStatus(
+  expected: 'online' | 'offline',
+  timeoutMs: number,
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const current = await pollServerStatus();
+      if (current.status === expected) return true;
+    } catch {
+      // ignore transient failures while we keep polling
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+  return false;
+}
+
 export const ControlButtons: React.FC<ControlButtonsProps> = ({
   status,
   loading = false,
   onStatusChange,
 }) => {
-  const [buttonLoading, setButtonLoading] = useState<'start' | 'stop' | 'restart' | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [buttonLoading, setButtonLoading] = useState<Action | null>(null);
+  const { push } = useToasts();
 
   const isTransitioning = status?.status === 'starting' || status?.status === 'stopping';
   const isOnline = status?.status === 'online';
   const isOffline = status?.status === 'offline';
 
   const handleServerAction = useCallback(
-    async (action: 'start' | 'stop' | 'restart') => {
+    async (action: Action) => {
+      const label = ACTION_LABEL[action];
+      setButtonLoading(action);
+
+      let result: ActionResult;
       try {
-        setButtonLoading(action);
-        setError(null);
-
-        await apiPost(`/api/server/${action}`, {});
-
-        // Trigger a status update after action
-        onStatusChange?.();
+        result = await apiPost<ActionResult>(`/api/server/${action}`, {});
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to perform action';
-        setError(errorMessage);
-        console.error(`Failed to ${action} server:`, err);
-      } finally {
+        const errorMessage = err instanceof Error ? err.message : 'Request failed';
+        push({
+          kind: 'error',
+          title: `${label} request failed`,
+          message: errorMessage,
+        });
         setButtonLoading(null);
+        return;
       }
+
+      if (!result.success) {
+        push({
+          kind: 'error',
+          title: `${label} failed`,
+          message: result.message ?? 'The server rejected the request.',
+        });
+        onStatusChange?.();
+        setButtonLoading(null);
+        return;
+      }
+
+      push({
+        kind: 'info',
+        title: `${label} command sent`,
+        message: 'Waiting for the server to respond…',
+        durationMs: VERIFY_TIMEOUT_MS[action] + 5000,
+      });
+
+      onStatusChange?.();
+
+      const arrived = await waitForStatus(EXPECTED_AFTER[action], VERIFY_TIMEOUT_MS[action]);
+      onStatusChange?.();
+
+      if (arrived) {
+        push({
+          kind: 'success',
+          title: `${label} succeeded`,
+          message: `Server is ${EXPECTED_AFTER[action]}.`,
+        });
+      } else {
+        push({
+          kind: 'error',
+          title: `${label} did not complete`,
+          message: `Server was not ${EXPECTED_AFTER[action]} after ${
+            VERIFY_TIMEOUT_MS[action] / 1000
+          }s. Check the console for clues.`,
+          durationMs: 0,
+        });
+      }
+
+      setButtonLoading(null);
     },
-    [onStatusChange]
+    [push, onStatusChange],
   );
 
   const handleStart = () => handleServerAction('start');
@@ -55,10 +147,7 @@ export const ControlButtons: React.FC<ControlButtonsProps> = ({
 
   return (
     <div className="control-buttons">
-      {error && <div className="control-buttons__error">{error}</div>}
-
       <div className="control-buttons__group">
-        {/* Start button - visible when offline */}
         {isOffline && (
           <button
             className="btn btn--green control-buttons__button"
@@ -77,7 +166,6 @@ export const ControlButtons: React.FC<ControlButtonsProps> = ({
           </button>
         )}
 
-        {/* Stop button - visible when online */}
         {isOnline && (
           <button
             className="btn btn--red control-buttons__button"
@@ -96,7 +184,6 @@ export const ControlButtons: React.FC<ControlButtonsProps> = ({
           </button>
         )}
 
-        {/* Restart button - always visible */}
         <button
           className="btn btn--yellow control-buttons__button"
           onClick={handleRestart}
@@ -120,11 +207,10 @@ export const ControlButtons: React.FC<ControlButtonsProps> = ({
         </button>
       </div>
 
-      {/* Status message during transitions */}
       {isTransitioning && !buttonLoading && (
         <div className="control-buttons__status">
           <span className="control-buttons__spinner-small" />
-          Server is {status.status}...
+          Server is {status?.status}...
         </div>
       )}
     </div>

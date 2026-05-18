@@ -50,6 +50,23 @@ export function useApi<T>(url: string, options?: UseApiOptions): UseApiResult<T>
   return { data, loading, error, refetch: fetchData };
 }
 
+async function parseJsonOrNull(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function extractMessage(body: unknown, fallback: string): string {
+  if (body && typeof body === 'object') {
+    const obj = body as Record<string, unknown>;
+    if (typeof obj.message === 'string' && obj.message.trim()) return obj.message;
+    if (typeof obj.error === 'string' && obj.error.trim()) return obj.error;
+  }
+  return fallback;
+}
+
 export async function apiPost<T>(url: string, body: unknown): Promise<T> {
   const response = await globalThis.fetch(url, {
     method: 'POST',
@@ -57,19 +74,22 @@ export async function apiPost<T>(url: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
 
+  const parsed = await parseJsonOrNull(response);
+
   if (!response.ok) {
-    throw new Error(`Failed to post: ${response.statusText}`);
+    throw new Error(extractMessage(parsed, `Request failed: ${response.statusText}`));
   }
 
-  return response.json() as Promise<T>;
+  return parsed as T;
 }
 
 export async function apiDelete<T>(url: string): Promise<T> {
   const response = await globalThis.fetch(url, { method: 'DELETE' });
+  const parsed = await parseJsonOrNull(response);
 
   if (!response.ok) {
-    throw new Error(`Failed to delete: ${response.statusText}`);
+    throw new Error(extractMessage(parsed, `Request failed: ${response.statusText}`));
   }
 
-  return response.json() as Promise<T>;
+  return parsed as T;
 }
