@@ -6,12 +6,14 @@ interface ControlButtonsProps {
   status: ServerStatus | null;
   loading?: boolean;
   onStatusChange?: () => void;
+  compact?: boolean;
 }
 
 export const ControlButtons: React.FC<ControlButtonsProps> = ({
   status,
   loading = false,
   onStatusChange,
+  compact = false,
 }) => {
   const [buttonLoading, setButtonLoading] = useState<'start' | 'stop' | 'restart' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,16 +47,18 @@ export const ControlButtons: React.FC<ControlButtonsProps> = ({
   const handleStop = () => handleServerAction('stop');
   const handleRestart = () => handleServerAction('restart');
 
+  const rootClassName = compact ? 'control-buttons control-buttons--compact' : 'control-buttons';
+
   if (loading) {
     return (
-      <div className="control-buttons">
+      <div className={rootClassName}>
         <div className="control-buttons__placeholder">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="control-buttons">
+    <div className={rootClassName}>
       {error && <div className="control-buttons__error">{error}</div>}
 
       <div className="control-buttons__group">

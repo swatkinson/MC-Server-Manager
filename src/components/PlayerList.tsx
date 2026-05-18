@@ -1,129 +1,171 @@
 import { useState, useMemo } from 'react';
 import { usePlayerList } from '../hooks/usePlayerList';
-import { Player } from '../types/api';
 
 type SortBy = 'name' | 'joinTime';
 
+function formatJoinTime(joinTime: number): string {
+  const elapsed = Date.now() - joinTime;
+  const minutes = Math.floor(elapsed / 60000);
+  const hours = Math.floor(elapsed / 3600000);
+  const days = Math.floor(elapsed / 86400000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
+function avatarUrl(name: string, size = 48): string {
+  return `https://mc-heads.net/avatar/${encodeURIComponent(name)}/${size}`;
+}
+
 export function PlayerList() {
   const { players, loading, error, sortPlayers } = usePlayerList();
+  const [expanded, setExpanded] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>('joinTime');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredAndSortedPlayers = useMemo(() => {
-    let filtered = [...players];
+  const stripPlayers = useMemo(
+    () => sortPlayers([...players], 'joinTime'),
+    [players, sortPlayers]
+  );
 
-    // Filter by search term
+  const detailPlayers = useMemo(() => {
+    let filtered = [...players];
     if (searchTerm.trim()) {
-      filtered = filtered.filter((player) =>
-        player.name.toLowerCase().includes(searchTerm.toLowerCase())
+      filtered = filtered.filter((p) =>
+        p.name.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-
-    // Sort
-    filtered = sortPlayers(filtered, sortBy);
-
-    return filtered;
+    return sortPlayers(filtered, sortBy);
   }, [players, sortBy, searchTerm, sortPlayers]);
 
-  const formatJoinTime = (joinTime: number): string => {
-    const now = Date.now();
-    const elapsed = now - joinTime;
-
-    const minutes = Math.floor(elapsed / 60000);
-    const hours = Math.floor(elapsed / 3600000);
-    const days = Math.floor(elapsed / 86400000);
-
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    return `${days}d ago`;
-  };
-
-  if (error) {
-    return (
-      <div className="player-list">
-        <div className="player-list__error">
-          <p>Failed to load player list: {error}</p>
-        </div>
-      </div>
-    );
-  }
+  const count = stripPlayers.length;
 
   return (
-    <div className="player-list">
-      <div className="player-list__header">
-        <h3 className="player-list__title">Online Players</h3>
-        <span className="player-list__count">
-          {loading ? '...' : filteredAndSortedPlayers.length}
-        </span>
+    <>
+      <div className="player-strip" role="region" aria-label="Online players">
+        <button
+          type="button"
+          className="player-strip__count"
+          onClick={() => setExpanded(true)}
+          title="Show full player list"
+          aria-label={`${count} player${count === 1 ? '' : 's'} online — open details`}
+        >
+          <span className="player-strip__count-value">{loading ? '…' : count}</span>
+          <span className="player-strip__count-label">online</span>
+        </button>
+
+        <div className="player-strip__list">
+          {error ? (
+            <div className="player-strip__error" title={error}>!</div>
+          ) : stripPlayers.length === 0 ? (
+            <div className="player-strip__empty" title="No players online" />
+          ) : (
+            stripPlayers.map((player) => (
+              <button
+                key={player.uuid}
+                type="button"
+                className="player-strip__player"
+                onClick={() => setExpanded(true)}
+                title={player.name + (player.isOp ? ' (OP)' : '')}
+                aria-label={`Open details for ${player.name}`}
+              >
+                <img
+                  src={avatarUrl(player.name)}
+                  alt={player.name}
+                  className="player-strip__avatar"
+                  loading="lazy"
+                />
+                <span className="player-strip__tooltip">
+                  {player.name}
+                  {player.isOp && <span className="player-strip__tooltip-op">OP</span>}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
       </div>
 
-      <div className="player-list__controls">
-        <input
-          type="text"
-          className="player-list__search"
-          placeholder="Search players..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+      {expanded && (
+        <div
+          className="player-modal__backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Online players"
+          onClick={() => setExpanded(false)}
+        >
+          <div className="player-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="player-modal__header">
+              <h3 className="player-modal__title">
+                Online Players <span className="player-modal__count">{count}</span>
+              </h3>
+              <button
+                type="button"
+                className="player-modal__close"
+                onClick={() => setExpanded(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
 
-        <div className="player-list__sort-group">
-          <label className="player-list__label">Sort by:</label>
-          <select
-            className="player-list__select"
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortBy)}
-          >
-            <option value="joinTime">Join Time (Newest)</option>
-            <option value="name">Name (A-Z)</option>
-          </select>
-        </div>
+            <div className="player-modal__controls">
+              <input
+                type="text"
+                className="player-list__search"
+                placeholder="Search players..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              <select
+                className="player-list__select"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortBy)}
+                aria-label="Sort players"
+              >
+                <option value="joinTime">Join Time (Newest)</option>
+                <option value="name">Name (A-Z)</option>
+              </select>
+            </div>
 
-      </div>
-
-      {loading && filteredAndSortedPlayers.length === 0 ? (
-        <div className="player-list__placeholder">
-          <p>Loading players...</p>
-        </div>
-      ) : filteredAndSortedPlayers.length === 0 ? (
-        <div className="player-list__placeholder">
-          <p>No players online</p>
-        </div>
-      ) : (
-        <div className="player-list__table-wrapper">
-          <table className="player-list__table">
-            <thead className="player-list__thead">
-              <tr>
-                <th className="player-list__th player-list__th--name">Player Name</th>
-                <th className="player-list__th player-list__th--uuid">UUID</th>
-                <th className="player-list__th player-list__th--joinTime">Join Time</th>
-                <th className="player-list__th player-list__th--status">Status</th>
-              </tr>
-            </thead>
-            <tbody className="player-list__tbody">
-              {filteredAndSortedPlayers.map((player) => (
-                <tr key={player.uuid} className="player-list__tr">
-                  <td className="player-list__td player-list__td--name">
-                    <span className="player-list__player-name">{player.name}</span>
-                    {player.isOp && <span className="player-list__op-badge">OP</span>}
-                  </td>
-                  <td className="player-list__td player-list__td--uuid">
-                    <code className="player-list__uuid">{player.uuid}</code>
-                  </td>
-                  <td className="player-list__td player-list__td--joinTime">
-                    {formatJoinTime(player.joinTime)}
-                  </td>
-                  <td className="player-list__td player-list__td--status">
-                    <span className="player-list__status-badge player-list__status-badge--online">
-                      Online
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            {error ? (
+              <div className="player-list__error">
+                <p>Failed to load player list: {error}</p>
+              </div>
+            ) : detailPlayers.length === 0 ? (
+              <div className="player-list__placeholder">
+                <p>{loading ? 'Loading players...' : 'No players online'}</p>
+              </div>
+            ) : (
+              <div className="player-modal__list">
+                {detailPlayers.map((player) => (
+                  <div key={player.uuid} className="player-modal__row">
+                    <img
+                      src={avatarUrl(player.name, 40)}
+                      alt={player.name}
+                      className="player-modal__avatar"
+                      loading="lazy"
+                    />
+                    <div className="player-modal__info">
+                      <div className="player-modal__name-row">
+                        <span className="player-modal__name">{player.name}</span>
+                        {player.isOp && <span className="player-list__op-badge">OP</span>}
+                      </div>
+                      <code className="player-list__uuid">{player.uuid}</code>
+                    </div>
+                    <div className="player-modal__meta">
+                      <span className="player-list__status-badge player-list__status-badge--online">
+                        Online
+                      </span>
+                      <span className="player-modal__joined">{formatJoinTime(player.joinTime)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
