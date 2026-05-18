@@ -4,6 +4,10 @@ import { ConsoleManager } from './ConsoleManager.js';
 const POLL_INTERVAL_MS = 10_000;
 // MSPT readings older than this are treated as stale and the gauge clears.
 const STALE_AFTER_MS = 45_000;
+// Window after a poll during which log lines may be ours. Outside the
+// window we don't consume lines so a manual `/tps` from the user still
+// shows up in the console panel.
+const CONSUME_WINDOW_MS = 8_000;
 // A vanilla Minecraft tick budget is 50 ms (20 ticks per second).
 const TICK_BUDGET_MS = 50;
 
@@ -17,6 +21,7 @@ export class TpsTracker {
   private mspt: number | null = null;
   private source: 'paper' | 'forge' | null = null;
   private lastUpdatedMs = 0;
+  private lastPollMs = 0;
   private pollTimer: NodeJS.Timeout | null = null;
   private isRunningProbe: (() => Promise<boolean>) | null = null;
 
@@ -40,8 +45,13 @@ export class TpsTracker {
     }
   }
 
-  observe(line: LogLine): void {
+  /**
+   * Returns true if the line was a response (or error response) to one of
+   * our polling commands and should be hidden from the console panel.
+   */
+  observe(line: LogLine): boolean {
     const message = stripColors(line.message);
+    let matched = false;
 
     // Paper / Purpur / Spigot `/tps` output:
     //   "TPS from last 1m, 5m, 15m: 20.0, 20.0, 20.0"
@@ -53,6 +63,7 @@ export class TpsTracker {
       this.tps = parseFloat(paperTps[1]);
       this.source = 'paper';
       this.lastUpdatedMs = Date.now();
+      matched = true;
     }
 
     // Paper `/mspt` output (1.18+):
@@ -64,6 +75,7 @@ export class TpsTracker {
       this.mspt = parseFloat(paperMspt[1]);
       this.source = 'paper';
       this.lastUpdatedMs = Date.now();
+      matched = true;
     }
 
     // Forge `/forge tps` output:
@@ -76,7 +88,34 @@ export class TpsTracker {
       this.tps = parseFloat(forge[2]);
       this.source = 'forge';
       this.lastUpdatedMs = Date.now();
+      matched = true;
     }
+
+    if (matched) return true;
+
+    // Within the poll window, also swallow the "Unknown command" feedback
+    // and the per-dimension forge lines so the console panel stays clean.
+    const withinWindow = Date.now() - this.lastPollMs < CONSUME_WINDOW_MS;
+    if (!withinWindow) return false;
+
+    // Vanilla / Paper unknown-command echoes with the caret marker, e.g.:
+    //   "Unknown or incomplete command, see below for error"
+    //   "tps<--[HERE]" / "mspt<--[HERE]" / "forge<--[HERE]" / "forge tps<--[HERE]"
+    if (/<--\[HERE\]/.test(message) && /\b(tps|mspt|forge)\b/i.test(message)) {
+      return true;
+    }
+    if (/Unknown or incomplete command/i.test(message)) {
+      return true;
+    }
+    if (/Unknown command/i.test(message) && /(tps|mspt|forge)/i.test(message)) {
+      return true;
+    }
+    // Forge per-dimension lines printed by `/forge tps`:
+    //   "Dim minecraft:overworld: Mean tick time: 1.234 ms. Mean TPS: 20.000"
+    if (/Dim\s+[^:]+:\s*Mean tick time:.*Mean TPS/i.test(message)) {
+      return true;
+    }
+    return false;
   }
 
   getMetrics(): TpsMetrics | null {
@@ -109,6 +148,7 @@ export class TpsTracker {
         return;
       }
     }
+    this.lastPollMs = Date.now();
     // Send each known command. The server runs whichever it understands and
     // ignores the rest (logged at INFO as "Unknown command" — harmless).
     for (const command of ['tps', 'mspt', 'forge tps']) {

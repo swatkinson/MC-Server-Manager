@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import * as fs from 'fs/promises';
 import { JvmHeap, SystemMetrics, TpsMetrics } from '../types/index.js';
 import { config } from '../config.js';
+import { findJavaPid } from './processUtils.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -146,17 +147,6 @@ function clamp(value: number): number {
 function parseMeminfo(content: string, key: string): number {
   const match = content.match(new RegExp(`^${key}:\\s+(\\d+)\\s+kB`, 'm'));
   return match ? parseInt(match[1], 10) : 0;
-}
-
-async function findJavaPid(): Promise<number | null> {
-  try {
-    const { stdout } = await execFileAsync('pgrep', ['-f', 'java.*\\.jar']);
-    const first = stdout.trim().split(/\s+/)[0];
-    const parsed = parseInt(first, 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-  } catch {
-    return null;
-  }
 }
 
 // jstat reads JVM heap counters from the hsperfdata memory-mapped file —
