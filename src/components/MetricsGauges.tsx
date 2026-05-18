@@ -53,6 +53,89 @@ function GaugeSvg({ percentage: initialPercentage, color, size = 120, strokeWidt
   );
 }
 
+const HEAP_COLOR = '#22c55e'; // var(--green)
+const OTHER_COLOR = '#64748b'; // muted slate
+
+interface RamCardProps {
+  ram: SystemMetrics['ram'];
+  fallbackColor: string;
+}
+
+function RamCard({ ram, fallbackColor }: RamCardProps) {
+  const total = ram.total;
+  const heapUsed = ram.jvm?.heapUsed ?? 0;
+  const heapMax = ram.jvm?.heapMax ?? 0;
+  const otherUsed = ram.systemOther;
+  const heapPct = total > 0 ? clampPct((heapUsed / total) * 100) : 0;
+  const otherPct = total > 0 ? clampPct((otherUsed / total) * 100) : 0;
+  const xmxPct = total > 0 && heapMax > 0 ? clampPct((heapMax / total) * 100) : null;
+  const heapVsXmx = heapMax > 0 ? clampPct((heapUsed / heapMax) * 100) : null;
+
+  return (
+    <div className="metrics-gauges__card">
+      <h3 className="metrics-gauges__title">RAM Usage</h3>
+
+      <div className="ram-meter">
+        <div className="ram-meter__bar">
+          <div
+            className="ram-meter__segment ram-meter__segment--heap"
+            style={{ width: `${heapPct}%`, background: HEAP_COLOR }}
+            title={`JVM heap: ${formatBytes(heapUsed)}`}
+          />
+          <div
+            className="ram-meter__segment ram-meter__segment--other"
+            style={{ width: `${otherPct}%`, background: OTHER_COLOR }}
+            title={`Other system usage: ${formatBytes(otherUsed)}`}
+          />
+          {xmxPct !== null && (
+            <div
+              className="ram-meter__xmx"
+              style={{ left: `${xmxPct}%` }}
+              title={`-Xmx ceiling: ${formatBytes(heapMax)}`}
+            >
+              <span className="ram-meter__xmx-label">Xmx</span>
+            </div>
+          )}
+        </div>
+        <div className="ram-meter__scale">
+          <span>0</span>
+          <span>{formatBytes(total)}</span>
+        </div>
+      </div>
+
+      <div className="metrics-gauges__breakdown">
+        <div className="metrics-gauges__breakdown-item">
+          <span className="metrics-gauges__breakdown-color" style={{ background: HEAP_COLOR }} />
+          <span className="metrics-gauges__breakdown-label">JVM heap</span>
+          <span
+            className="metrics-gauges__breakdown-value"
+            style={{ color: ram.jvm ? undefined : fallbackColor }}
+          >
+            {ram.jvm
+              ? `${formatBytes(heapUsed)} / ${formatBytes(heapMax)}${
+                  heapVsXmx !== null ? ` (${heapVsXmx.toFixed(0)}%)` : ''
+                }`
+              : 'unavailable'}
+          </span>
+        </div>
+        <div className="metrics-gauges__breakdown-item">
+          <span className="metrics-gauges__breakdown-color" style={{ background: OTHER_COLOR }} />
+          <span className="metrics-gauges__breakdown-label">Other system</span>
+          <span className="metrics-gauges__breakdown-value">{formatBytes(otherUsed)}</span>
+        </div>
+        <div className="metrics-gauges__breakdown-item">
+          <span className="metrics-gauges__breakdown-label">Total RAM</span>
+          <span className="metrics-gauges__breakdown-value">{formatBytes(total)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function clampPct(value: number): number {
+  return Math.min(100, Math.max(0, value));
+}
+
 export function MetricsGauges({ metrics, loading, error }: MetricsGaugesProps) {
   const [displayMetrics, setDisplayMetrics] = useState<SystemMetrics | null>(null);
 
@@ -109,37 +192,7 @@ export function MetricsGauges({ metrics, loading, error }: MetricsGaugesProps) {
         </div>
       </div>
 
-      <div className="metrics-gauges__card">
-        <h3 className="metrics-gauges__title">RAM Usage</h3>
-
-        <div className="metrics-gauges__gauge-container">
-          <div className="metrics-gauges__gauge">
-            <GaugeSvg percentage={displayMetrics.ram.percentage} color={ramColor} />
-          </div>
-
-          <div className="metrics-gauges__stats">
-            <div className="metrics-gauges__stat-value" style={{ color: ramColor }}>
-              {formatPercentage(displayMetrics.ram.percentage)}
-            </div>
-            <div className="metrics-gauges__stat-label">Used</div>
-          </div>
-        </div>
-
-        <div className="metrics-gauges__breakdown">
-          <div className="metrics-gauges__breakdown-item">
-            <span className="metrics-gauges__breakdown-label">Total</span>
-            <span className="metrics-gauges__breakdown-value">
-              {formatBytes(displayMetrics.ram.total)}
-            </span>
-          </div>
-          <div className="metrics-gauges__breakdown-item">
-            <span className="metrics-gauges__breakdown-label">Used</span>
-            <span className="metrics-gauges__breakdown-value">
-              {formatBytes(displayMetrics.ram.used)}
-            </span>
-          </div>
-        </div>
-      </div>
+      <RamCard ram={displayMetrics.ram} fallbackColor={ramColor} />
 
       <div className="metrics-gauges__card">
         <h3 className="metrics-gauges__title">Storage</h3>

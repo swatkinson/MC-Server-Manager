@@ -24,6 +24,20 @@ export interface Player {
   isOp: boolean;
 }
 
+export interface JvmHeap {
+  heapUsed: number;
+  heapCommitted: number;
+  heapMax: number;
+}
+
+export interface TpsMetrics {
+  tps: number | null;
+  mspt: number | null;
+  headroomPercent: number | null;
+  source: 'paper' | 'forge' | null;
+  lastUpdatedMs: number;
+}
+
 export interface SystemMetrics {
   cpu: {
     percentage: number;
@@ -32,6 +46,8 @@ export interface SystemMetrics {
     total: number;
     used: number;
     percentage: number;
+    jvm: JvmHeap | null;
+    systemOther: number;
   };
   storage: {
     total: number;
@@ -39,6 +55,15 @@ export interface SystemMetrics {
     free: number;
     percentage: number;
   };
+  tps: TpsMetrics | null;
+}
+
+export interface PortForwardCheckResult {
+  ok: boolean | null;
+  publicIp: string | null;
+  port: number;
+  checkedAt: number;
+  message: string;
 }
 
 export interface ServerConfig {

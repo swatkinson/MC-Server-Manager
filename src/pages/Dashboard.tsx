@@ -7,16 +7,19 @@ import { ConfigPanel } from '../components/ConfigPanel'
 import { useMetrics } from '../hooks/useMetrics'
 import { useServerStatus } from '../hooks/useServerStatus'
 import { useStartupChecks } from '../hooks/usePreflight'
+import { usePortForwardCheck } from '../hooks/usePortForwardCheck'
 
 export function Dashboard() {
   const { metrics, loading: metricsLoading, error: metricsError } = useMetrics()
   const { status, loading: statusLoading, refetch: refetchStatus } = useServerStatus()
   useStartupChecks()
+  usePortForwardCheck()
 
   return (
     <div className="dashboard">
       <ServerHeader
         status={status}
+        tps={metrics?.tps ?? null}
         loading={statusLoading}
         actions={
           <ControlButtons
