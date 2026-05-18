@@ -100,21 +100,18 @@ export class MetricsCollector {
     const pid = await findJavaPid();
     if (!pid) return null;
     try {
-      const [heapInfoOutput, flagsOutput] = await Promise.all([
-        execFileAsync('jcmd', [String(pid), 'GC.heap_info'], { timeout: 5_000 }),
-        execFileAsync('jcmd', [String(pid), 'VM.flags'], { timeout: 5_000 }),
+      const [heapStats, heapMax] = await Promise.all([
+        readHeapStats(pid),
+        readMaxHeapFromCmdline(pid),
       ]);
-      const { used, committed } = parseHeapInfo(heapInfoOutput.stdout);
-      const maxFromFlag = parseMaxHeapFlag(flagsOutput.stdout);
-      const heapMax = maxFromFlag ?? committed;
-      if (heapMax <= 0) return null;
+      if (!heapStats || !heapMax) return null;
       return {
-        heapUsed: used,
-        heapCommitted: committed,
+        heapUsed: heapStats.used,
+        heapCommitted: heapStats.committed,
         heapMax,
       };
-    } catch (error) {
-      // jcmd may not be installed, or the JVM may be in a transitional state.
+    } catch {
+      // jstat may not be installed, or the JVM may be in a transitional state.
       // Returning null lets the gauge fall back to system-only display.
       return null;
     }
@@ -162,52 +159,56 @@ async function findJavaPid(): Promise<number | null> {
   }
 }
 
-// jcmd GC.heap_info output varies by collector. We look at the first line
-// that describes the live heap (G1 / Parallel use "total X, used Y"; ZGC /
-// Shenandoah use "used X, capacity Y"). Metaspace lines also report "used"
-// and "committed", so we explicitly skip lines that mention metaspace or
-// class space.
-function parseHeapInfo(output: string): { used: number; committed: number } {
-  let used = 0;
-  let committed = 0;
-  const lines = output.split('\n');
-  for (const line of lines) {
-    const lower = line.toLowerCase();
-    if (lower.includes('metaspace') || lower.includes('class space')) continue;
-    const totalUsed = line.match(/total\s+(\d+)([KMG]),\s*used\s+(\d+)([KMG])/i);
-    if (totalUsed) {
-      committed = toBytes(parseInt(totalUsed[1], 10), totalUsed[2]);
-      used = toBytes(parseInt(totalUsed[3], 10), totalUsed[4]);
-      return { used, committed };
-    }
-    const usedCapacity = line.match(/used\s+(\d+)([KMG]),\s*capacity\s+(\d+)([KMG])/i);
-    if (usedCapacity) {
-      used = toBytes(parseInt(usedCapacity[1], 10), usedCapacity[2]);
-      committed = toBytes(parseInt(usedCapacity[3], 10), usedCapacity[4]);
-      return { used, committed };
-    }
+// jstat reads JVM heap counters from the hsperfdata memory-mapped file —
+// no Attach API, no signals to the JVM. Output (columns in KB):
+//   S0C S1C S0U S1U EC EU OC OU MC MU CCSC CCSU YGC YGCT FGC FGCT CGC CGCT GCT
+// Heap used = S0U + S1U + EU + OU; committed = S0C + S1C + EC + OC.
+async function readHeapStats(pid: number): Promise<{ used: number; committed: number } | null> {
+  try {
+    const { stdout } = await execFileAsync('jstat', ['-gc', String(pid)], { timeout: 3_000 });
+    const lines = stdout.trim().split('\n');
+    if (lines.length < 2) return null;
+    const headers = lines[0].trim().split(/\s+/);
+    const values = lines[1].trim().split(/\s+/);
+    const at = (key: string): number => {
+      const i = headers.indexOf(key);
+      if (i < 0) return 0;
+      const parsed = parseFloat(values[i] ?? '');
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    const usedKb = at('S0U') + at('S1U') + at('EU') + at('OU');
+    const committedKb = at('S0C') + at('S1C') + at('EC') + at('OC');
+    if (committedKb <= 0) return null;
+    return { used: usedKb * 1024, committed: committedKb * 1024 };
+  } catch {
+    return null;
   }
-  return { used, committed };
 }
 
-// jcmd VM.flags lists active flags including the heap ceiling, e.g.:
-//   "-XX:MaxHeapSize=8589934592" (bytes)
-function parseMaxHeapFlag(output: string): number | null {
-  const match = output.match(/-XX:MaxHeapSize=(\d+)/);
-  if (!match) return null;
-  const value = parseInt(match[1], 10);
-  return Number.isFinite(value) && value > 0 ? value : null;
-}
-
-function toBytes(value: number, unit: string): number {
-  switch (unit.toUpperCase()) {
-    case 'K':
-      return value * 1024;
-    case 'M':
-      return value * 1024 * 1024;
-    case 'G':
-      return value * 1024 * 1024 * 1024;
-    default:
-      return value;
+// /proc/<pid>/cmdline is null-separated. We scan it for an -Xmx flag and
+// convert k/m/g suffixes to bytes. The JVM accepts e.g. -Xmx8G, -Xmx8192m,
+// -Xmx8589934592.
+async function readMaxHeapFromCmdline(pid: number): Promise<number | null> {
+  try {
+    const data = await fs.readFile(`/proc/${pid}/cmdline`, 'utf-8');
+    for (const arg of data.split('\0')) {
+      const match = arg.match(/^-Xmx(\d+)([kKmMgG]?)$/);
+      if (!match) continue;
+      const value = parseInt(match[1], 10);
+      if (!Number.isFinite(value) || value <= 0) return null;
+      switch (match[2].toLowerCase()) {
+        case 'g':
+          return value * 1024 * 1024 * 1024;
+        case 'm':
+          return value * 1024 * 1024;
+        case 'k':
+          return value * 1024;
+        default:
+          return value;
+      }
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
