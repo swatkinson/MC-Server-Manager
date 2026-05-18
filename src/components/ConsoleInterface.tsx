@@ -37,12 +37,11 @@ export function ConsoleInterface({ logs, loading, error }: ConsoleInterfaceProps
           fontFamily: 'Menlo, Monaco, "Courier New", monospace',
         }}
       >
-        <span className="console-interface__timestamp" style={{ color: '#8892a4' }}>
-          {log.timestamp}
-        </span>
-        <span className="console-interface__level" style={{ color }}>
-          {` [${log.level}] `}
-        </span>
+        {log.timestamp && (
+          <span className="console-interface__timestamp" style={{ color: '#8892a4' }}>
+            {`[${log.timestamp}]: `}
+          </span>
+        )}
         <span className="console-interface__message">
           {log.message}
         </span>

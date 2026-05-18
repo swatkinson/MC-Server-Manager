@@ -4,6 +4,7 @@ import '../styles/config-panel.css';
 interface JVMParametersEditorProps {
   isOpen: boolean;
   onClose: () => void;
+  serverRunning?: boolean;
 }
 
 const EXAMPLE_PARAMETERS = [
@@ -16,6 +17,7 @@ const EXAMPLE_PARAMETERS = [
 export const JVMParametersEditor: React.FC<JVMParametersEditorProps> = ({
   isOpen,
   onClose,
+  serverRunning = false,
 }) => {
   const [expanded, setExpanded] = useState(false);
 
@@ -29,23 +31,20 @@ export const JVMParametersEditor: React.FC<JVMParametersEditorProps> = ({
           <button className="modal__close" onClick={onClose}>×</button>
         </div>
 
-        <div className="modal__warning">
-          <span className="modal__warning-icon">⚠</span>
-          <span>JVM parameter changes require server restart to take effect</span>
-        </div>
+        {serverRunning && (
+          <div className="modal__warning">
+            <span className="modal__warning-icon">⚠</span>
+            <span>JVM parameter changes require server restart to take effect</span>
+          </div>
+        )}
 
         <div className="modal__content">
           <div className="jvm-section">
             <h3 className="jvm-section__title">Startup Parameters</h3>
             <p className="jvm-section__description">
-              To edit JVM parameters, modify your server startup script or configuration file directly.
-              Common locations include:
+              JVM parameters are defined in the <code className="jvm-section__path">start.sh</code> script.
+              To change them, edit that script directly and restart the server.
             </p>
-            <ul className="jvm-section__paths">
-              <li>start.sh or start.bat</li>
-              <li>server.properties</li>
-              <li>server configuration files</li>
-            </ul>
           </div>
 
           <div className="jvm-section">

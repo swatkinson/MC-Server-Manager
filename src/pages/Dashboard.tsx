@@ -37,7 +37,7 @@ export function Dashboard() {
 
           <section className="card">
             <h2>Configuration</h2>
-            <ConfigPanel />
+            <ConfigPanel serverStatus={status} />
           </section>
         </aside>
 
