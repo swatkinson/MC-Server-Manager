@@ -1,6 +1,7 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs/promises';
+import * as path from 'path';
 import { ServerStatus } from '../types/index.js';
 import { config } from '../config.js';
 
@@ -17,16 +18,17 @@ export class ServerManager {
 
   async getStatus(): Promise<ServerStatus> {
     try {
-      const [isRunning, properties, uptimeSeconds] = await Promise.all([
+      const [isRunning, properties, uptimeSeconds, version] = await Promise.all([
         this.isServerRunning(),
         this.readServerProperties(),
         this.getUptimeSeconds(),
+        this.detectVersion(),
       ]);
 
       return {
         status: isRunning ? 'online' : 'offline',
         uptime: isRunning ? uptimeSeconds : 0,
-        version: (properties['server-version'] as string) || '1.20.1',
+        version,
         motd: (properties['motd'] as string) || 'A Minecraft Server',
         ip: (properties['server-ip'] as string) || 'localhost',
         players: {
@@ -158,6 +160,48 @@ export class ServerManager {
       return Math.max(0, Math.floor((Date.now() - stats.mtimeMs) / 1000));
     } catch {
       return 0;
+    }
+  }
+
+  private async detectVersion(): Promise<string> {
+    return (
+      (await this.readVersionFromLog()) ?? (await this.readVersionFromJar()) ?? 'unknown'
+    );
+  }
+
+  private async readVersionFromLog(): Promise<string | null> {
+    let fd: fs.FileHandle | undefined;
+    try {
+      fd = await fs.open(config.logPath, 'r');
+      const buf = Buffer.alloc(64 * 1024);
+      const { bytesRead } = await fd.read(buf, 0, buf.length, 0);
+      const text = buf.subarray(0, bytesRead).toString('utf-8');
+      const match = text.match(/Starting minecraft server version (\S+)/i);
+      return match ? match[1] : null;
+    } catch {
+      return null;
+    } finally {
+      await fd?.close().catch(() => {});
+    }
+  }
+
+  private async readVersionFromJar(): Promise<string | null> {
+    try {
+      const entries = await fs.readdir(config.minecraftDir);
+      const jars = entries.filter((name) => name.toLowerCase().endsWith('.jar'));
+      const serverNamePattern =
+        /^(server|paper|purpur|spigot|craftbukkit|fabric|forge|vanilla|minecraft[_-]server)/i;
+      const versionPattern = /(\d+\.\d+(?:\.\d+)?)/;
+      const ranked = [...jars].sort(
+        (a, b) => Number(serverNamePattern.test(b)) - Number(serverNamePattern.test(a)),
+      );
+      for (const name of ranked) {
+        const match = path.basename(name, '.jar').match(versionPattern);
+        if (match) return match[1];
+      }
+      return null;
+    } catch {
+      return null;
     }
   }
 
