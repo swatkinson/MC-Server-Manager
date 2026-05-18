@@ -8,6 +8,10 @@ const execFileAsync = promisify(execFile);
 
 type ActionResult = { success: boolean; message: string };
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export class ServerManager {
   private isTransitioning = false;
 
@@ -86,7 +90,7 @@ export class ServerManager {
       await this.waitForShutdown(20_000);
 
       if (await this.isServerRunning()) {
-        await execFileAsync('pkill', ['-f', 'java.*minecraft'], { timeout: 10_000 });
+        await execFileAsync('pkill', ['-f', 'java.*\\.jar'], { timeout: 10_000 });
       }
       return { success: true, message: 'Server stopped' };
     } catch (error) {
@@ -114,8 +118,26 @@ export class ServerManager {
   }
 
   private async isServerRunning(): Promise<boolean> {
+    if (await this.isScreenSessionActive()) return true;
+    return this.isJavaProcessRunning();
+  }
+
+  private async isScreenSessionActive(): Promise<boolean> {
     try {
-      await execFileAsync('pgrep', ['-f', 'java.*minecraft']);
+      const { stdout } = await execFileAsync('screen', ['-ls', config.screenSession]);
+      const sessionPattern = new RegExp(`\\b\\d+\\.${escapeRegex(config.screenSession)}\\b`);
+      return sessionPattern.test(stdout);
+    } catch (error) {
+      // `screen -ls` exits non-zero when no matching sessions exist; stdout is still on the error.
+      const stdout = (error as { stdout?: string }).stdout ?? '';
+      const sessionPattern = new RegExp(`\\b\\d+\\.${escapeRegex(config.screenSession)}\\b`);
+      return sessionPattern.test(stdout);
+    }
+  }
+
+  private async isJavaProcessRunning(): Promise<boolean> {
+    try {
+      await execFileAsync('pgrep', ['-f', 'java.*\\.jar']);
       return true;
     } catch {
       return false;
