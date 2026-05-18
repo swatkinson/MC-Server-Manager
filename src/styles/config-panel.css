@@ -323,7 +323,7 @@
   width: max-content;
   max-width: 320px;
   padding: 0.75rem 0.875rem;
-  background: #0a0e1a;
+  background: var(--bg-sunken);
   border: 1px solid var(--border);
   border-radius: 6px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
@@ -401,7 +401,7 @@
 
 .property-input {
   padding: 0.5rem 0.75rem;
-  background: #0a0e1a;
+  background: var(--bg-sunken);
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text);
@@ -508,7 +508,7 @@
 
 .whitelist-form__input {
   padding: 0.5rem 0.75rem;
-  background: #0a0e1a;
+  background: var(--bg-sunken);
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text);
@@ -658,16 +658,13 @@
   line-height: 1.5;
 }
 
-.jvm-section__paths {
-  margin: 0.5rem 0 0 1.5rem;
-  padding: 0;
-  list-style: disc;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-.jvm-section__paths li {
-  margin-bottom: 0.25rem;
+.jvm-section__path {
+  padding: 0.1rem 0.4rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 0.85em;
+  color: var(--green);
 }
 
 .jvm-section__toggle {

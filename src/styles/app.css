@@ -5,17 +5,18 @@
 }
 
 :root {
-  --bg: #0f1117;
-  --bg-card: #1a1d2e;
-  --border: #2d3150;
-  --text: #e2e8f0;
-  --text-muted: #8892a4;
-  --green: #22c55e;
-  --red: #ef4444;
-  --yellow: #f59e0b;
-  --blue: #3b82f6;
-  --purple: #a855f7;
-  --gray: #6b7280;
+  --bg: #14181a;
+  --bg-card: #1d2326;
+  --bg-sunken: #0d1112;
+  --border: #2f3a3f;
+  --text: #ece6d8;
+  --text-muted: #93a09e;
+  --green: #6ab04c;
+  --red: #d05858;
+  --yellow: #e0a92e;
+  --blue: #3fa9c4;
+  --purple: #9b6cc6;
+  --gray: #6f7a7d;
 }
 
 html, body, #root {
@@ -277,12 +278,13 @@ body {
 }
 
 .server-header__status-indicator {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
+  padding: 0.4rem 0.85rem;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: 999px;
   white-space: nowrap;
 }
 
@@ -308,9 +310,10 @@ body {
 .server-header__info-grid {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 1.5rem;
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
   border-top: 1px solid var(--border);
 }
 
@@ -476,7 +479,7 @@ body {
   padding: 1rem;
   font-size: 0.85rem;
   line-height: 1.5;
-  background: #0a0e1a;
+  background: var(--bg-sunken);
   border-bottom: 1px solid var(--border);
 }
 
@@ -544,7 +547,7 @@ body {
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem;
-  background: #0a0e1a;
+  background: var(--bg-sunken);
   border: 1px solid var(--border);
   border-radius: 8px;
   font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
@@ -742,7 +745,7 @@ body {
   flex: 1;
   min-height: 38px;
   padding: 0.5rem 1rem;
-  background: #0a0e1a;
+  background: var(--bg-sunken);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
@@ -787,7 +790,7 @@ body {
 .player-list__select {
   min-height: 38px;
   padding: 0.5rem 0.75rem;
-  background: #0a0e1a;
+  background: var(--bg-sunken);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);

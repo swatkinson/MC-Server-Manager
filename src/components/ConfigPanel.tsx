@@ -3,13 +3,16 @@ import { ServerPropertiesEditor } from './ServerPropertiesEditor';
 import { WhitelistManager } from './WhitelistManager';
 import { JVMParametersEditor } from './JVMParametersEditor';
 import { WorldBackupDownloader } from './WorldBackupDownloader';
+import { ServerStatus } from '../types/api';
 import '../styles/config-panel.css';
 
 interface ConfigPanelProps {
   className?: string;
+  serverStatus?: ServerStatus | null;
 }
 
-export const ConfigPanel: React.FC<ConfigPanelProps> = ({ className = '' }) => {
+export const ConfigPanel: React.FC<ConfigPanelProps> = ({ className = '', serverStatus }) => {
+  const serverRunning = serverStatus?.status === 'online' || serverStatus?.status === 'starting';
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [whitelistOpen, setWhitelistOpen] = useState(false);
   const [jvmOpen, setJvmOpen] = useState(false);
@@ -61,6 +64,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ className = '' }) => {
       <ServerPropertiesEditor
         isOpen={propertiesOpen}
         onClose={() => setPropertiesOpen(false)}
+        serverRunning={serverRunning}
       />
       <WhitelistManager
         isOpen={whitelistOpen}
@@ -69,6 +73,7 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ className = '' }) => {
       <JVMParametersEditor
         isOpen={jvmOpen}
         onClose={() => setJvmOpen(false)}
+        serverRunning={serverRunning}
       />
       <WorldBackupDownloader
         isOpen={backupOpen}

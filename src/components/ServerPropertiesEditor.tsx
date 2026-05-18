@@ -10,6 +10,7 @@ import '../styles/config-panel.css';
 interface ServerPropertiesEditorProps {
   isOpen: boolean;
   onClose: () => void;
+  serverRunning?: boolean;
 }
 
 interface ActiveTooltip {
@@ -25,10 +26,10 @@ const TOOLTIP_MAX_WIDTH = 320;
 export const ServerPropertiesEditor: React.FC<ServerPropertiesEditorProps> = ({
   isOpen,
   onClose,
+  serverRunning = false,
 }) => {
   const { properties, saving, saveProperties } = useServerConfig();
   const [editedProperties, setEditedProperties] = useState<ServerProperties>({});
-  const [backup, setBackup] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [activeTooltip, setActiveTooltip] = useState<ActiveTooltip | null>(null);
@@ -56,7 +57,7 @@ export const ServerPropertiesEditor: React.FC<ServerPropertiesEditorProps> = ({
     try {
       setError(null);
       setSuccess(false);
-      await saveProperties(editedProperties, backup);
+      await saveProperties(editedProperties, false);
       setSuccess(true);
       setTimeout(() => {
         setSuccess(false);
@@ -100,10 +101,12 @@ export const ServerPropertiesEditor: React.FC<ServerPropertiesEditorProps> = ({
           <button className="modal__close" onClick={onClose}>×</button>
         </div>
 
-        <div className="modal__warning">
-          <span className="modal__warning-icon">⚠</span>
-          <span>Changes require server restart to take effect</span>
-        </div>
+        {serverRunning && (
+          <div className="modal__warning">
+            <span className="modal__warning-icon">⚠</span>
+            <span>Changes require server restart to take effect</span>
+          </div>
+        )}
 
         {error && (
           <div className="modal__error">
@@ -157,17 +160,6 @@ export const ServerPropertiesEditor: React.FC<ServerPropertiesEditorProps> = ({
         </div>
 
         <div className="modal__footer">
-          <div className="modal__checkbox">
-            <input
-              type="checkbox"
-              id="backup-checkbox"
-              checked={backup}
-              onChange={e => setBackup(e.target.checked)}
-              disabled={saving}
-            />
-            <label htmlFor="backup-checkbox">Create backup before saving</label>
-          </div>
-
           <div className="modal__actions">
             <button
               className="btn btn--gray"
