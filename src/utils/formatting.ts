@@ -37,16 +37,6 @@ export function getColorByPercentage(percentage: number): 'green' | 'amber' | 'r
 }
 
 /**
- * Determine CPU color based on percentage threshold
- * Green: 0-50%, Amber: 50-80%, Red: 80-100%
- */
-export function getCpuColorByPercentage(percentage: number): 'green' | 'amber' | 'red' {
-  if (percentage < 50) return 'green';
-  if (percentage < 80) return 'amber';
-  return 'red';
-}
-
-/**
  * Get CSS color variable for a given color zone
  */
 export function getCssColorForZone(zone: 'green' | 'amber' | 'red'): string {
