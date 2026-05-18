@@ -11,6 +11,7 @@ import { MetricsCollector } from './services/MetricsCollector.js';
 import { ConsoleManager, isValidCommand } from './services/ConsoleManager.js';
 import { ConfigManager, isValidUuid } from './services/ConfigManager.js';
 import { PlayerManager } from './services/PlayerManager.js';
+import { runPreflightChecks } from './services/PreflightChecker.js';
 import { config } from './config.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -50,6 +51,18 @@ const asyncRoute =
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
+
+app.get(
+  '/api/health/preflight',
+  asyncRoute(async (_req, res) => {
+    try {
+      const checks = await runPreflightChecks();
+      res.json({ checks });
+    } catch (error) {
+      fail(res, 500, 'Failed to run preflight checks', error);
+    }
+  }),
+);
 
 app.get(
   '/api/server/status',
