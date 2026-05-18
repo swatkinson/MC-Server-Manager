@@ -8,10 +8,17 @@ import {
   Outlet,
 } from '@tanstack/react-router'
 import { Dashboard } from './pages/Dashboard'
+import { ToastProvider } from './context/ToastContext'
+import { ToastContainer } from './components/ToastContainer'
 import './styles/app.css'
 
 const rootRoute = createRootRoute({
-  component: () => <Outlet />,
+  component: () => (
+    <>
+      <Outlet />
+      <ToastContainer />
+    </>
+  ),
 })
 
 const indexRoute = createRoute({
@@ -32,6 +39,8 @@ declare module '@tanstack/react-router' {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <ToastProvider>
+      <RouterProvider router={router} />
+    </ToastProvider>
   </StrictMode>
 )

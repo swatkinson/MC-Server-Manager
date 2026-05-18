@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useApi, apiPost } from './useApi';
 import { useServerSocket } from './useServerSocket';
+import { useToasts } from '../context/ToastContext';
 
 export interface ServerProperties {
   [key: string]: string | number | boolean;
@@ -21,6 +22,7 @@ export function useServerConfig(): UseServerConfigReturn {
     { manual: false }
   );
   const { on } = useServerSocket();
+  const { push } = useToasts();
   const [saving, setSaving] = useState(false);
   const [properties, setProperties] = useState<ServerProperties | null>(null);
 
@@ -37,20 +39,27 @@ export function useServerConfig(): UseServerConfigReturn {
 
   const saveProperties = useCallback(
     async (newProperties: ServerProperties, backup = false) => {
+      setSaving(true);
       try {
-        setSaving(true);
         await apiPost('/api/config/server-properties', {
           properties: newProperties,
           backup,
         });
         setProperties(newProperties);
+        push({
+          kind: 'success',
+          title: 'server.properties saved',
+          message: 'Changes take effect on next server restart.',
+        });
       } catch (err) {
-        throw err instanceof Error ? err : new Error('Failed to save properties');
+        const message = err instanceof Error ? err.message : 'Failed to save properties';
+        push({ kind: 'error', title: 'Could not save server.properties', message });
+        throw err instanceof Error ? err : new Error(message);
       } finally {
         setSaving(false);
       }
     },
-    []
+    [push]
   );
 
   return {

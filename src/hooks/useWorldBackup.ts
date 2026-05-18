@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useToasts } from '../context/ToastContext';
 
 interface WorldBackupProgress {
   status: 'idle' | 'loading' | 'downloading' | 'error' | 'complete';
@@ -20,23 +21,27 @@ export function useWorldBackup(): UseWorldBackupReturn {
     progress: 0,
     error: null,
   });
+  const { push } = useToasts();
 
   const downloadWorldBackup = useCallback(async () => {
     try {
       setBackupState({ status: 'loading', progress: 0, error: null });
 
-      // Request the backup to be created
-      const response = await fetch('/api/server/world-backup', {
-        method: 'POST',
-      });
+      const response = await fetch('/api/server/world-backup', { method: 'POST' });
 
       if (!response.ok) {
-        throw new Error(`Failed to create backup: ${response.statusText}`);
+        let serverMessage = response.statusText;
+        try {
+          const body = await response.json();
+          if (body?.error) serverMessage = body.error;
+        } catch {
+          // not JSON; keep statusText
+        }
+        throw new Error(serverMessage);
       }
 
       setBackupState({ status: 'downloading', progress: 50, error: null });
 
-      // Get the backup file
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -48,16 +53,22 @@ export function useWorldBackup(): UseWorldBackupReturn {
       document.body.removeChild(a);
 
       setBackupState({ status: 'complete', progress: 100, error: null });
+      push({
+        kind: 'success',
+        title: 'World backup ready',
+        message: 'Download started.',
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setBackupState({
-        status: 'error',
-        progress: 0,
-        error: errorMessage,
+      setBackupState({ status: 'error', progress: 0, error: errorMessage });
+      push({
+        kind: 'error',
+        title: 'World backup failed',
+        message: errorMessage,
       });
       throw err;
     }
-  }, []);
+  }, [push]);
 
   const reset = useCallback(() => {
     setBackupState({ status: 'idle', progress: 0, error: null });

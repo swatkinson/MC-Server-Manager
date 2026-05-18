@@ -6,10 +6,12 @@ import { MetricsGauges } from '../components/MetricsGauges'
 import { ConfigPanel } from '../components/ConfigPanel'
 import { useMetrics } from '../hooks/useMetrics'
 import { useServerStatus } from '../hooks/useServerStatus'
+import { useStartupChecks } from '../hooks/usePreflight'
 
 export function Dashboard() {
   const { metrics, loading: metricsLoading, error: metricsError } = useMetrics()
   const { status, loading: statusLoading, refetch: refetchStatus } = useServerStatus()
+  useStartupChecks()
 
   return (
     <div className="dashboard">
