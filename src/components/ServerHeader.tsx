@@ -24,7 +24,7 @@ export const ServerHeader: React.FC<ServerHeaderProps> = ({ status, loading = fa
           </div>
         </div>
         <div className="server-header__info-grid">
-          <div className="server-header__status-indicator">
+          <div className="server-header__status-indicator server-header__status-indicator--end">
             <span className="server-header__status-dot" style={{ backgroundColor: '#6b7280' }} />
             <span className="server-header__status-text">—</span>
           </div>
@@ -59,13 +59,6 @@ export const ServerHeader: React.FC<ServerHeaderProps> = ({ status, loading = fa
       </div>
 
       <div className="server-header__info-grid">
-        <div className="server-header__status-indicator">
-          <span
-            className="server-header__status-dot"
-            style={{ backgroundColor: statusColor }}
-          />
-          <span className="server-header__status-text">{statusLabel}</span>
-        </div>
         <div className="server-header__info-item">
           <span className="server-header__info-label">Players</span>
           <span className="server-header__info-value">
@@ -81,6 +74,13 @@ export const ServerHeader: React.FC<ServerHeaderProps> = ({ status, loading = fa
           <span className="server-header__info-value">
             {status.status === 'online' ? formatUptime(status.uptime) : '—'}
           </span>
+        </div>
+        <div className="server-header__status-indicator server-header__status-indicator--end">
+          <span
+            className="server-header__status-dot"
+            style={{ backgroundColor: statusColor }}
+          />
+          <span className="server-header__status-text">{statusLabel}</span>
         </div>
       </div>
     </div>
