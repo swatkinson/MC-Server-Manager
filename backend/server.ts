@@ -153,9 +153,8 @@ app.post(
       return;
     }
     try {
-      const output = await consoleManager.executeCommand(command);
-      io.emit('console:command:executed', { command, output });
-      res.json({ success: true, output });
+      await consoleManager.executeCommand(command);
+      res.json({ success: true });
     } catch (error) {
       fail(res, 500, 'Failed to execute command', error);
     }

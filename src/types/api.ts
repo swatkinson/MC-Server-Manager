@@ -56,5 +56,4 @@ export interface ConsoleLogsResponse {
 
 export interface ConsoleCommandResponse {
   success: boolean;
-  output: string;
 }

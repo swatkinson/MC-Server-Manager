@@ -18,7 +18,6 @@ export function ConsolePanel() {
     resetHistory,
     loading: commandLoading,
     error: commandError,
-    lastOutput,
     historyLength,
   } = useConsoleCommand();
 
@@ -54,7 +53,6 @@ export function ConsolePanel() {
           loading={commandLoading}
           historyLength={historyLength}
           error={commandError}
-          lastOutput={lastOutput}
         />
       </div>
     </div>
