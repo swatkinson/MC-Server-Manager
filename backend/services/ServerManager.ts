@@ -4,6 +4,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { ServerStatus } from '../types/index.js';
 import { config } from '../config.js';
+import { findJavaPid, getProcessAgeSeconds } from './processUtils.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -159,12 +160,10 @@ export class ServerManager {
   }
 
   private async getUptimeSeconds(): Promise<number> {
-    try {
-      const stats = await fs.stat(config.worldPath);
-      return Math.max(0, Math.floor((Date.now() - stats.mtimeMs) / 1000));
-    } catch {
-      return 0;
-    }
+    const pid = await findJavaPid();
+    if (!pid) return 0;
+    const age = await getProcessAgeSeconds(pid);
+    return age ?? 0;
   }
 
   private async detectVersion(): Promise<string> {

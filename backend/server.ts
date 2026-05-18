@@ -353,8 +353,8 @@ consoleManager.setPlayerManager(playerManager, (players) => {
 
 consoleManager
   .watchLogs((line) => {
-    io.emit('console:line', line);
-    tpsTracker.observe(line);
+    const consumedByTps = tpsTracker.observe(line);
+    if (!consumedByTps) io.emit('console:line', line);
   })
   .catch((error) => {
     console.error('Error watching logs:', error);
