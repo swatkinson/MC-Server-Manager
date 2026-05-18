@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { ConsoleCommandResponse } from '../types/api';
 import { apiPost } from './useApi';
 import { useServerSocket } from './useServerSocket';
+import { useToasts } from '../context/ToastContext';
 
 export function useConsoleCommand() {
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
@@ -11,6 +12,7 @@ export function useConsoleCommand() {
   const [lastOutput, setLastOutput] = useState<string>('');
 
   const { on } = useServerSocket();
+  const { push } = useToasts();
 
   const executeCommand = useCallback(async (command: string) => {
     if (!command.trim()) {
@@ -33,15 +35,25 @@ export function useConsoleCommand() {
         setHistoryIndex(-1);
       } else {
         setError('Command execution failed');
+        push({
+          kind: 'error',
+          title: 'Console command failed',
+          message: 'The server reported a failure executing the command.',
+        });
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to execute command';
       setError(errorMessage);
       setLastOutput('');
+      push({
+        kind: 'error',
+        title: 'Console command failed',
+        message: errorMessage,
+      });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [push]);
 
   const getPreviousCommand = useCallback(
     (currentIndex: number) => {
