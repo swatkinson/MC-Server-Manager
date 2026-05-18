@@ -15,17 +15,24 @@ export function Dashboard() {
 
   return (
     <div className="dashboard">
-      <ServerHeader status={status} loading={statusLoading} />
+      <ServerHeader
+        status={status}
+        loading={statusLoading}
+        actions={
+          <ControlButtons
+            status={status}
+            loading={statusLoading}
+            onStatusChange={refetchStatus}
+            compact
+          />
+        }
+      />
 
       <main className="dashboard__main">
         <aside className="dashboard__aside">
           <section className="card">
-            <h2>Server Control</h2>
-            <ControlButtons
-              status={status}
-              loading={statusLoading}
-              onStatusChange={refetchStatus}
-            />
+            <h2>System Metrics</h2>
+            <MetricsGauges metrics={metrics} loading={metricsLoading} error={metricsError} />
           </section>
 
           <section className="card">
@@ -35,20 +42,12 @@ export function Dashboard() {
         </aside>
 
         <article className="dashboard__content">
-          <section className="card card--full">
-            <h2>System Metrics</h2>
-            <MetricsGauges metrics={metrics} loading={metricsLoading} error={metricsError} />
-          </section>
-
-          <section className="card card--full">
-            <h2>Player List</h2>
-            <PlayerList />
-          </section>
-
-          <section className="card card--full dashboard__console">
+          <section className="card dashboard__console">
             <ConsolePanel />
           </section>
         </article>
+
+        <PlayerList />
       </main>
     </div>
   )
