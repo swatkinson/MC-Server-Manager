@@ -12,6 +12,8 @@ import { ConsoleManager, isValidCommand } from './services/ConsoleManager.js';
 import { ConfigManager, isValidUuid } from './services/ConfigManager.js';
 import { PlayerManager } from './services/PlayerManager.js';
 import { runPreflightChecks } from './services/PreflightChecker.js';
+import { TpsTracker } from './services/TpsTracker.js';
+import { PortForwardChecker } from './services/PortForwardChecker.js';
 import { config } from './config.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -29,6 +31,12 @@ const metricsCollector = new MetricsCollector();
 const consoleManager = new ConsoleManager();
 const configManager = new ConfigManager();
 const playerManager = new PlayerManager();
+const tpsTracker = new TpsTracker(consoleManager);
+const portForwardChecker = new PortForwardChecker();
+
+tpsTracker.setRunningProbe(() => serverManager.isRunning());
+tpsTracker.start();
+metricsCollector.setTpsProvider(() => tpsTracker.getMetrics());
 
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
@@ -81,6 +89,11 @@ app.post(
     try {
       const result = await serverManager.start();
       io.emit('server:status:changed', result);
+      if (result.success) {
+        portForwardChecker.scheduleStartupCheck((checkResult) => {
+          io.emit('portforward:result', checkResult);
+        });
+      }
       res.json(result);
     } catch (error) {
       fail(res, 500, 'Failed to start server', error);
@@ -94,6 +107,7 @@ app.post(
     try {
       const result = await serverManager.stop();
       if (result.success) playerManager.clearAll();
+      portForwardChecker.cancelStartupCheck();
       io.emit('server:status:changed', result);
       res.json(result);
     } catch (error) {
@@ -108,9 +122,27 @@ app.post(
     try {
       const result = await serverManager.restart();
       io.emit('server:status:changed', result);
+      if (result.success) {
+        portForwardChecker.scheduleStartupCheck((checkResult) => {
+          io.emit('portforward:result', checkResult);
+        });
+      }
       res.json(result);
     } catch (error) {
       fail(res, 500, 'Failed to restart server', error);
+    }
+  }),
+);
+
+app.get(
+  '/api/server/portforward/check',
+  asyncRoute(async (_req, res) => {
+    try {
+      const result = await portForwardChecker.check();
+      io.emit('portforward:result', result);
+      res.json(result);
+    } catch (error) {
+      fail(res, 500, 'Failed to run port-forward check', error);
     }
   }),
 );
@@ -322,6 +354,7 @@ consoleManager.setPlayerManager(playerManager, (players) => {
 consoleManager
   .watchLogs((line) => {
     io.emit('console:line', line);
+    tpsTracker.observe(line);
   })
   .catch((error) => {
     console.error('Error watching logs:', error);
@@ -355,6 +388,8 @@ function shutdown(signal: string): void {
   console.log(`Received ${signal}, shutting down gracefully...`);
   if (metricsInterval) clearInterval(metricsInterval);
   consoleManager.stop();
+  tpsTracker.stop();
+  portForwardChecker.cancelStartupCheck();
   io.close();
   httpServer.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 10_000).unref();

@@ -119,6 +119,10 @@ export class ServerManager {
     }
   }
 
+  async isRunning(): Promise<boolean> {
+    return this.isServerRunning();
+  }
+
   private async isServerRunning(): Promise<boolean> {
     if (await this.isScreenSessionActive()) return true;
     return this.isJavaProcessRunning();

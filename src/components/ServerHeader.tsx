@@ -1,5 +1,5 @@
 import React from 'react';
-import { ServerStatus } from '../types/api';
+import { ServerStatus, TpsMetrics } from '../types/api';
 
 const STATUS_COLORS: Record<ServerStatus['status'], string> = {
   online: '#22c55e',
@@ -10,11 +10,19 @@ const STATUS_COLORS: Record<ServerStatus['status'], string> = {
 
 interface ServerHeaderProps {
   status: ServerStatus | null;
+  tps?: TpsMetrics | null;
   loading?: boolean;
   actions?: React.ReactNode;
 }
 
-export const ServerHeader: React.FC<ServerHeaderProps> = ({ status, loading = false, actions }) => {
+function tpsColor(tps: number | null): string {
+  if (tps === null) return 'var(--text)';
+  if (tps >= 19.5) return 'var(--green)';
+  if (tps >= 18) return 'var(--yellow)';
+  return 'var(--red)';
+}
+
+export const ServerHeader: React.FC<ServerHeaderProps> = ({ status, tps, loading = false, actions }) => {
   if (loading || !status) {
     return (
       <div className="server-header">
@@ -60,12 +68,6 @@ export const ServerHeader: React.FC<ServerHeaderProps> = ({ status, loading = fa
 
       <div className="server-header__info-grid">
         <div className="server-header__info-item">
-          <span className="server-header__info-label">Players</span>
-          <span className="server-header__info-value">
-            {status.players.current}/{status.players.max}
-          </span>
-        </div>
-        <div className="server-header__info-item">
           <span className="server-header__info-label">Version</span>
           <span className="server-header__info-value">{status.version}</span>
         </div>
@@ -73,6 +75,21 @@ export const ServerHeader: React.FC<ServerHeaderProps> = ({ status, loading = fa
           <span className="server-header__info-label">Uptime</span>
           <span className="server-header__info-value">
             {status.status === 'online' ? formatUptime(status.uptime) : '—'}
+          </span>
+        </div>
+        <div className="server-header__info-item">
+          <span className="server-header__info-label">TPS</span>
+          <span
+            className="server-header__info-value"
+            style={{ color: tpsColor(tps?.tps ?? null) }}
+          >
+            {status.status === 'online' && tps?.tps !== null && tps?.tps !== undefined
+              ? `${tps.tps.toFixed(1)}${
+                  tps.headroomPercent !== null
+                    ? ` (${Math.round(tps.headroomPercent)}% headroom)`
+                    : ''
+                }`
+              : '—'}
           </span>
         </div>
         <div className="server-header__status-indicator server-header__status-indicator--end">
