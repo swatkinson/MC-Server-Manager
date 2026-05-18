@@ -27,14 +27,10 @@ export interface Player {
 export interface SystemMetrics {
   cpu: {
     percentage: number;
-    jvmPercentage: number;
-    otherPercentage: number;
   };
   ram: {
     total: number;
     used: number;
-    jvmAllocated: number;
-    jvmUsed: number;
     percentage: number;
   };
   storage: {
