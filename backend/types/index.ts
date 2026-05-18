@@ -53,3 +53,13 @@ export interface ServerConfig {
   gameMode: string;
   [key: string]: string | number | boolean;
 }
+
+export interface WhitelistEntry {
+  uuid: string;
+  name: string;
+}
+
+export interface WhitelistData {
+  entries: WhitelistEntry[];
+  enabled: boolean;
+}

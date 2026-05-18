@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 
 interface ConsoleInputProps {
   onSubmit: (command: string) => void;
@@ -25,16 +25,6 @@ export function ConsoleInput({
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [showOutput, setShowOutput] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Reset history when input changes
-  useEffect(() => {
-    if (input.length > 0 && historyIndex !== -1) {
-      // User is typing, so they've exited history mode
-      if (input !== onPreviousCommand(historyIndex) && input !== onNextCommand(historyIndex)) {
-        // Only reset if they've actually typed something different
-      }
-    }
-  }, [input, historyIndex, onPreviousCommand, onNextCommand]);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

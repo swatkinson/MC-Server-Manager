@@ -1,6 +1,9 @@
 # MC Server Manager
 
-A self-hosted web dashboard for managing a Minecraft server, built with React + TanStack Router and designed to run directly on the Ubuntu Server VM alongside the Minecraft server.
+A self-hosted web dashboard for managing a Minecraft server, built with React +
+TanStack Router on the frontend and an Express + Socket.IO backend. Both are
+served from a single Node.js process running directly on the same Ubuntu Server
+VM as the Minecraft server.
 
 ---
 
@@ -13,36 +16,36 @@ A self-hosted web dashboard for managing a Minecraft server, built with React + 
 
 ---
 
-## Planned Features
+## Features
 
-### Phase 1 — MVP & CI/CD Pipeline *(current)*
+### Phase 1 — MVP & CI/CD Pipeline
 - [x] Basic dashboard UI (TanStack Router + React + Vite)
-- [x] Automated deployment via GitHub Actions → rsync → nginx
+- [x] Automated deployment via GitHub Actions → rsync → systemd
 
 ### Phase 2 — Dashboard & Server Control
-- [ ] Server status header with name, IP, MOTD, and status (#4)
-- [ ] Server control buttons: start / stop / restart (#4)
-- [ ] Live console display with command input (#5)
-- [ ] System monitoring gauges: CPU, RAM, Storage (#7)
-- [ ] Real start / stop / restart (via systemctl or screen/tmux)
-- [ ] Live server status (online/offline, uptime)
+- [x] Server status header with name, IP, MOTD, and status
+- [x] Server control buttons: start / stop / restart
+- [x] Live console display with command input
+- [x] System monitoring gauges: CPU, RAM, Storage
+- [x] Real start / stop / restart (via `screen` + `start.sh`)
+- [x] Live server status (online/offline, uptime)
 
 ### Phase 3 — Player Management & Configuration
-- [ ] Online player list (#6)
-- [ ] Kick / ban / op / whitelist controls
+- [x] Online player list (parsed from server log)
+- [x] Server configuration editor (`server.properties`)
+- [x] JVM parameters reference panel
+- [x] Whitelist manager (add / remove / enforce toggle)
+- [x] World file download/backup (streamed tar.gz)
+- [ ] Kick / ban / op controls
 - [ ] Player history log
-- [ ] Server configuration editor (server.properties) (#8)
-- [ ] JVM parameters editor (#8)
-- [ ] Whitelist manager (#8)
-- [ ] World file download/backup (#8)
 
 ### Phase 4 — Console & Logs
-- [ ] Live log streaming (WebSocket)
+- [x] Live log streaming (WebSocket via Socket.IO)
+- [x] In-browser console (send commands to server)
 - [ ] Log history and search
-- [ ] In-browser console (send commands to server)
 
-### Phase 5 — Configuration & Backups
-- [ ] Edit `server.properties` via UI
+### Phase 5 — Backups & Scheduling
+- [x] One-shot world backup download
 - [ ] Plugin/mod listing
 - [ ] Automated backup scheduling and management
 
@@ -56,16 +59,49 @@ A self-hosted web dashboard for managing a Minecraft server, built with React + 
 | Routing | TanStack Router v1 |
 | Build Tool | Vite |
 | Styles | Plain CSS (no framework) |
-| CI/CD | GitHub Actions |
-| Web Server | nginx (serves built static files) |
+| Backend | Express + Socket.IO (Node 18+) |
+| Realtime | Socket.IO with polling fallback |
+| CI/CD | GitHub Actions (self-hosted runner) |
+| Process | systemd (`mc-server-manager.service`) |
 | Host | Ubuntu Server VM |
+
+---
+
+## Architecture
+
+A single Node.js process serves both the React static bundle and the API.
+
+```
+browser ──HTTP/WS──▶ Node process (port 80)
+                       │
+                       ├─ serves dist/ static files
+                       ├─ REST /api/* (Express)
+                       ├─ /socket.io/* (Socket.IO)
+                       │
+                       └─ talks to the MC server via:
+                           ├─ `screen -S minecraft -X stuff` (commands)
+                           ├─ `pgrep` / `pkill` (status / hard stop)
+                           ├─ `start.sh` (start)
+                           ├─ tails logs/latest.log
+                           └─ reads/writes server.properties, whitelist.json
+```
+
+Configurable via environment variables:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `3001` (dev) / `80` (prod) | HTTP port |
+| `NODE_ENV` | `development` | `production` enables static file serving |
+| `MINECRAFT_DIR` | `~/MinecraftServer` | Root directory of the MC server |
+| `STORAGE_PATH` | `$MINECRAFT_DIR` | Path queried by `df` for the storage gauge |
+| `MC_SCREEN_SESSION` | `minecraft` | Name of the `screen` session running the MC server |
 
 ---
 
 ## Development
 
 ### Prerequisites
-- Node.js 20+
+- Node.js 18+
 - npm
 
 ### Run locally
@@ -73,114 +109,36 @@ A self-hosted web dashboard for managing a Minecraft server, built with React + 
 git clone https://github.com/swatkinson/mc-server-manager.git
 cd mc-server-manager
 npm install
-npm run dev
+npm run dev          # starts the backend (3001) and Vite dev server in parallel
 ```
 
-### Build
+The Vite dev server proxies `/api` and `/socket.io` to `localhost:3001`.
+
+### Scripts
 ```bash
-npm run build       # outputs to dist/
-npm run preview     # preview the built output locally
+npm run dev          # backend + frontend dev servers
+npm run typecheck    # type-check frontend and backend
+npm run build        # build frontend only (dist/)
+npm run build:prod   # build frontend AND compile backend (dist/backend/)
+npm run start        # run the compiled backend
 ```
 
 ---
 
-## CI/CD Pipeline
+## Deployment
 
-Every push to `main` triggers the GitHub Actions deploy workflow which:
-1. Checks out the code on a GitHub-hosted runner
-2. Installs dependencies and builds the project (`dist/`)
-3. Connects to the Ubuntu server via SSH
-4. Rsyncs the built `dist/` to `/var/www/mc-server-manager/` on the server
-5. nginx automatically serves the updated files
+The dashboard is deployed via `.github/workflows/deploy.yml` on a self-hosted
+GitHub Actions runner that lives on the same Ubuntu host as the Minecraft
+server. Every push to `main`:
 
-### Required GitHub Secrets
+1. Installs deps and runs `npm run build:prod`
+2. Rsyncs `dist/`, `package.json`, `package-lock.json`, and the systemd unit
+   to `~/mc-server-manager` on the host
+3. Runs `npm ci --omit=dev` on the host
+4. Restarts the `mc-server-manager` systemd service
+5. Verifies the service is active
 
-Add these in **Settings → Secrets and variables → Actions** on the repository:
+The service unit at `mc-server-manager.service` binds the Node process to
+port 80 directly via `CAP_NET_BIND_SERVICE`; nginx is no longer used.
 
-| Secret | Description |
-|---|---|
-| `SERVER_HOST` | IP address or hostname of the Ubuntu server |
-| `SERVER_USER` | SSH username (e.g. `ubuntu` or your username) |
-| `SSH_PRIVATE_KEY` | Private SSH key content (ED25519 recommended) |
-| `SERVER_PORT` | SSH port — optional, defaults to `22` |
-
----
-
-## Server Setup (Ubuntu)
-
-Follow these steps once to prepare the Ubuntu server to receive deployments.
-
-### 1. Install nginx
-```bash
-sudo apt update && sudo apt install -y nginx
-```
-
-### 2. Create the web root directory
-```bash
-sudo mkdir -p /var/www/mc-server-manager
-sudo chown -R $USER:$USER /var/www/mc-server-manager
-```
-
-### 3. Configure nginx
-
-Create a new site config:
-```bash
-sudo nano /etc/nginx/sites-available/mc-server-manager
-```
-
-Paste the following (replace `_` with your server's IP or domain if desired):
-```nginx
-server {
-    listen 80;
-    server_name _;
-
-    root /var/www/mc-server-manager;
-    index index.html;
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-}
-```
-
-Enable the site and reload nginx:
-```bash
-sudo ln -s /etc/nginx/sites-available/mc-server-manager /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-> You may want to remove the default nginx site: `sudo rm /etc/nginx/sites-enabled/default`
-
-### 4. Create an SSH key pair for GitHub Actions
-
-Run this on your Ubuntu server:
-```bash
-ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/github_deploy
-```
-
-This creates:
-- `~/.ssh/github_deploy` — **private key** (goes into GitHub Secrets)
-- `~/.ssh/github_deploy.pub` — **public key** (stays on the server)
-
-### 5. Authorize the key on the server
-
-```bash
-cat ~/.ssh/github_deploy.pub >> ~/.ssh/authorized_keys
-chmod 600 ~/.ssh/authorized_keys
-```
-
-### 6. Add secrets to GitHub
-
-Go to your repository → **Settings → Secrets and variables → Actions → New repository secret** and add:
-
-| Secret name | Value |
-|---|---|
-| `SERVER_HOST` | Your server's IP address |
-| `SERVER_USER` | Your SSH username |
-| `SSH_PRIVATE_KEY` | Full contents of `~/.ssh/github_deploy` (the private key file) |
-| `SERVER_PORT` | `22` (or your custom port) |
-
-### 7. Test the pipeline
-
-Push any change to `main` and watch the **Actions** tab on GitHub. The deploy job should complete and your dashboard will be live at `http://<your-server-ip>/`.
+See `DEPLOYMENT_SETUP.md` for one-time host setup.

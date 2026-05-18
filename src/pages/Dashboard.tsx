@@ -5,19 +5,25 @@ import { PlayerList } from '../components/PlayerList'
 import { MetricsGauges } from '../components/MetricsGauges'
 import { ConfigPanel } from '../components/ConfigPanel'
 import { useMetrics } from '../hooks/useMetrics'
+import { useServerStatus } from '../hooks/useServerStatus'
 
 export function Dashboard() {
-  const { metrics, loading, error } = useMetrics()
+  const { metrics, loading: metricsLoading, error: metricsError } = useMetrics()
+  const { status, loading: statusLoading, refetch: refetchStatus } = useServerStatus()
 
   return (
     <div className="dashboard">
-      <ServerHeader />
+      <ServerHeader status={status} loading={statusLoading} />
 
-      <main className="main" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 'var(--spacing-lg)', padding: 'var(--spacing-lg)' }}>
-        <aside style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+      <main className="dashboard__main">
+        <aside className="dashboard__aside">
           <section className="card">
             <h2>Server Control</h2>
-            <ControlButtons />
+            <ControlButtons
+              status={status}
+              loading={statusLoading}
+              onStatusChange={refetchStatus}
+            />
           </section>
 
           <section className="card">
@@ -26,10 +32,10 @@ export function Dashboard() {
           </section>
         </aside>
 
-        <article style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+        <article className="dashboard__content">
           <section className="card card--full">
             <h2>System Metrics</h2>
-            <MetricsGauges metrics={metrics} loading={loading} error={error} />
+            <MetricsGauges metrics={metrics} loading={metricsLoading} error={metricsError} />
           </section>
 
           <section className="card card--full">
@@ -37,8 +43,7 @@ export function Dashboard() {
             <PlayerList />
           </section>
 
-          <section className="card card--full" style={{ minHeight: '500px' }}>
-            <h2>Server Console</h2>
+          <section className="card card--full dashboard__console">
             <ConsolePanel />
           </section>
         </article>

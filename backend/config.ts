@@ -1,0 +1,27 @@
+import * as path from 'path';
+import * as os from 'os';
+
+function resolveMinecraftDir(): string {
+  const fromEnv = process.env.MINECRAFT_DIR;
+  if (fromEnv && fromEnv.trim()) return fromEnv;
+  return path.join(os.homedir(), 'MinecraftServer');
+}
+
+const minecraftDir = resolveMinecraftDir();
+
+export const config = {
+  port: parseInt(process.env.PORT || '3001', 10),
+  nodeEnv: process.env.NODE_ENV || 'development',
+  isProduction: process.env.NODE_ENV === 'production',
+  minecraftDir,
+  logPath: path.join(minecraftDir, 'logs', 'latest.log'),
+  worldPath: path.join(minecraftDir, 'world'),
+  serverPropertiesPath: path.join(minecraftDir, 'server.properties'),
+  whitelistPath: path.join(minecraftDir, 'whitelist.json'),
+  opsPath: path.join(minecraftDir, 'ops.json'),
+  startScript: path.join(minecraftDir, 'start.sh'),
+  storagePath: process.env.STORAGE_PATH || minecraftDir,
+  screenSession: process.env.MC_SCREEN_SESSION || 'minecraft',
+  metricsIntervalMs: 5000,
+  maxConsoleLogLimit: 1000,
+} as const;
