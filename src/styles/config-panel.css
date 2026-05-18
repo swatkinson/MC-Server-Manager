@@ -271,12 +271,132 @@
 }
 
 .property-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   font-size: 0.85rem;
   font-weight: 500;
   color: var(--text-muted);
+  min-width: 0;
+}
+
+.property-label__text {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.property-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: help;
+  transition: all 0.15s;
+}
+
+.property-info:hover,
+.property-info:focus-visible {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: white;
+  outline: none;
+}
+
+.property-tooltip {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: max-content;
+  max-width: 320px;
+  padding: 0.75rem 0.875rem;
+  background: #0a0e1a;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--text);
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+  z-index: 1100;
+  animation: tooltipFade 0.12s ease-out;
+}
+
+.property-tooltip--bottom {
+  transform: translate(-50%, 0);
+}
+
+.property-tooltip::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+}
+
+.property-tooltip--top::after {
+  top: 100%;
+  border-top-color: var(--border);
+}
+
+.property-tooltip--bottom::after {
+  bottom: 100%;
+  border-bottom-color: var(--border);
+}
+
+@keyframes tooltipFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.property-tooltip__title {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--blue);
+  word-break: break-word;
+}
+
+.property-tooltip__description {
+  color: var(--text);
+}
+
+.property-tooltip__section {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.property-tooltip__section-label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.property-tooltip__code {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 0.75rem;
+  color: var(--green);
+  word-break: break-word;
 }
 
 .property-input {
