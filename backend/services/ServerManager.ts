@@ -2,9 +2,10 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { ServerStatus } from '../types/index.js';
+import { ServerStatus, ServerType } from '../types/index.js';
 import { config } from '../config.js';
 import { findJavaPid, getProcessAgeSeconds } from './processUtils.js';
+import { ServerInfoStore } from './ServerInfoStore.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -17,14 +18,24 @@ function escapeRegex(value: string): string {
 export class ServerManager {
   private isTransitioning = false;
 
+  constructor(private readonly infoStore: ServerInfoStore) {}
+
   async getStatus(): Promise<ServerStatus> {
     try {
-      const [isRunning, properties, uptimeSeconds, version] = await Promise.all([
+      const [isRunning, properties, uptimeSeconds] = await Promise.all([
         this.isServerRunning(),
         this.readServerProperties(),
         this.getUptimeSeconds(),
-        this.detectVersion(),
       ]);
+
+      let version: string;
+      if (isRunning) {
+        const detected = await this.detectAndPersistInfo();
+        version = detected.version;
+      } else {
+        // Use persisted version when offline so it survives restarts
+        version = await this.infoStore.getVersion();
+      }
 
       return {
         status: isRunning ? 'online' : 'offline',
@@ -124,6 +135,88 @@ export class ServerManager {
     return this.isServerRunning();
   }
 
+  private async detectAndPersistInfo(): Promise<{ version: string; serverType: ServerType }> {
+    const version = (await this.readVersionFromLog()) ?? (await this.readVersionFromJar()) ?? 'unknown';
+    const serverType = await this.detectServerType();
+    try {
+      await this.infoStore.write({ version, serverType });
+    } catch (err) {
+      console.error('Failed to persist server info:', err);
+    }
+    return { version, serverType };
+  }
+
+  private async detectServerType(): Promise<ServerType> {
+    const fromLog = await this.readTypeFromLog();
+    if (fromLog) return fromLog;
+    const fromFs = await this.readTypeFromFileSystem();
+    if (fromFs) return fromFs;
+    return (await this.readTypeFromJar()) ?? 'unknown';
+  }
+
+  private async readTypeFromLog(): Promise<ServerType | null> {
+    let fd: fs.FileHandle | undefined;
+    try {
+      fd = await fs.open(config.logPath, 'r');
+      const buf = Buffer.alloc(128 * 1024);
+      const { bytesRead } = await fd.read(buf, 0, buf.length, 0);
+      const text = buf.subarray(0, bytesRead).toString('utf-8');
+
+      if (/This server is running Purpur/i.test(text)) return 'purpur';
+      if (/This server is running Paper/i.test(text)) return 'paper';
+      // Spigot/CraftBukkit logs "This server is running CraftBukkit version"
+      if (/This server is running CraftBukkit/i.test(text)) return 'spigot';
+      if (/\[FabricLoader\]|Loading Fabric|net\.fabricmc/i.test(text)) return 'fabric';
+      if (/Forge Mod Loader|MinecraftForge|\bFML\b/i.test(text)) return 'forge';
+      return null;
+    } catch {
+      return null;
+    } finally {
+      await fd?.close().catch(() => {});
+    }
+  }
+
+  private async readTypeFromFileSystem(): Promise<ServerType | null> {
+    try {
+      const entries = await fs.readdir(config.minecraftDir);
+      const names = entries.map((e) => e.toLowerCase());
+
+      // Fabric: look for fabric-server-launch.jar or .fabric directory
+      if (names.some((n) => n === 'fabric-server-launch.jar' || n === '.fabric')) return 'fabric';
+
+      // Forge: look for libraries/net/minecraftforge/ or user_jvm_args.txt
+      if (names.includes('user_jvm_args.txt')) return 'forge';
+      try {
+        await fs.access(path.join(config.minecraftDir, 'libraries', 'net', 'minecraftforge'));
+        return 'forge';
+      } catch {}
+
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async readTypeFromJar(): Promise<ServerType | null> {
+    try {
+      const entries = await fs.readdir(config.minecraftDir);
+      const jars = entries.filter((n) => n.toLowerCase().endsWith('.jar'));
+      for (const name of jars) {
+        const lower = name.toLowerCase();
+        if (lower.includes('purpur')) return 'purpur';
+        if (lower.includes('paper')) return 'paper';
+        if (lower.includes('spigot')) return 'spigot';
+        if (lower.includes('craftbukkit')) return 'craftbukkit';
+        if (lower.includes('fabric')) return 'fabric';
+        if (lower.includes('forge')) return 'forge';
+        if (lower === 'server.jar' || lower.startsWith('minecraft_server')) return 'vanilla';
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   private async isServerRunning(): Promise<boolean> {
     if (await this.isScreenSessionActive()) return true;
     return this.isJavaProcessRunning();
@@ -135,7 +228,6 @@ export class ServerManager {
       const sessionPattern = new RegExp(`\\b\\d+\\.${escapeRegex(config.screenSession)}\\b`);
       return sessionPattern.test(stdout);
     } catch (error) {
-      // `screen -ls` exits non-zero when no matching sessions exist; stdout is still on the error.
       const stdout = (error as { stdout?: string }).stdout ?? '';
       const sessionPattern = new RegExp(`\\b\\d+\\.${escapeRegex(config.screenSession)}\\b`);
       return sessionPattern.test(stdout);
@@ -164,12 +256,6 @@ export class ServerManager {
     if (!pid) return 0;
     const age = await getProcessAgeSeconds(pid);
     return age ?? 0;
-  }
-
-  private async detectVersion(): Promise<string> {
-    return (
-      (await this.readVersionFromLog()) ?? (await this.readVersionFromJar()) ?? 'unknown'
-    );
   }
 
   private async readVersionFromLog(): Promise<string | null> {

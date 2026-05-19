@@ -14,6 +14,8 @@ import { PlayerManager } from './services/PlayerManager.js';
 import { runPreflightChecks } from './services/PreflightChecker.js';
 import { TpsTracker } from './services/TpsTracker.js';
 import { PortForwardChecker } from './services/PortForwardChecker.js';
+import { ServerInfoStore } from './services/ServerInfoStore.js';
+import { StartupScriptManager } from './services/StartupScriptManager.js';
 import { config } from './config.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -26,15 +28,18 @@ const io = new Server(httpServer, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
 });
 
-const serverManager = new ServerManager();
+const infoStore = new ServerInfoStore();
+const serverManager = new ServerManager(infoStore);
 const metricsCollector = new MetricsCollector();
 const consoleManager = new ConsoleManager();
 const configManager = new ConfigManager();
 const playerManager = new PlayerManager();
 const tpsTracker = new TpsTracker(consoleManager);
 const portForwardChecker = new PortForwardChecker();
+const startupScriptManager = new StartupScriptManager();
 
 tpsTracker.setRunningProbe(() => serverManager.isRunning());
+tpsTracker.setServerTypeProvider(() => infoStore.getServerType());
 tpsTracker.start();
 metricsCollector.setTpsProvider(() => tpsTracker.getMetrics());
 
@@ -329,6 +334,63 @@ app.get(
       res.json({ players });
     } catch (error) {
       fail(res, 500, 'Failed to get player list', error);
+    }
+  }),
+);
+
+app.get(
+  '/api/server/public-ip',
+  asyncRoute(async (_req, res) => {
+    try {
+      const publicIp = await portForwardChecker.getPublicIp();
+      res.json({ publicIp });
+    } catch (error) {
+      fail(res, 500, 'Failed to get public IP', error);
+    }
+  }),
+);
+
+app.get(
+  '/api/server/info',
+  asyncRoute(async (_req, res) => {
+    try {
+      const info = (await infoStore.read()) ?? { version: 'unknown', serverType: 'unknown', updatedAt: 0 };
+      res.json(info);
+    } catch (error) {
+      fail(res, 500, 'Failed to get server info', error);
+    }
+  }),
+);
+
+app.get(
+  '/api/config/startup-script',
+  asyncRoute(async (_req, res) => {
+    try {
+      res.json(await startupScriptManager.read());
+    } catch (error) {
+      fail(res, 500, 'Failed to read startup script', error);
+    }
+  }),
+);
+
+app.post(
+  '/api/config/startup-script',
+  asyncRoute(async (req, res) => {
+    const { xms, xmx, jar, extraFlags } = req.body ?? {};
+    if (typeof jar !== 'string' || !jar.trim()) {
+      fail(res, 400, 'JAR filename is required');
+      return;
+    }
+    try {
+      await startupScriptManager.write({
+        xms: typeof xms === 'string' ? xms.trim() : '',
+        xmx: typeof xmx === 'string' ? xmx.trim() : '',
+        jar: jar.trim(),
+        extraFlags: typeof extraFlags === 'string' ? extraFlags.trim() : '',
+      });
+      res.json({ success: true });
+    } catch (error) {
+      fail(res, 500, 'Failed to write startup script', error);
     }
   }),
 );

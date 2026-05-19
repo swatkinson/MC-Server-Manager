@@ -602,6 +602,11 @@
   cursor: not-allowed;
 }
 
+.btn--primary {
+  background: var(--blue);
+  color: white;
+}
+
 .btn--blue {
   background: var(--blue);
   color: white;
@@ -782,6 +787,97 @@
 
 .jvm-recommendation li {
   margin-bottom: 0.25rem;
+}
+
+/* JVM Fields */
+.jvm-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 500px) {
+  .jvm-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+.jvm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.jvm-field__label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.jvm-field__label code {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  font-size: 0.8em;
+  color: var(--green);
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+
+.jvm-field__input {
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  transition: border-color 0.2s;
+}
+
+.jvm-field__input:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.jvm-field__input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.jvm-field__textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  resize: vertical;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.jvm-field__textarea:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.jvm-field__textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.jvm-error {
+  margin: 0;
+  padding: 0.6rem 0.9rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--red);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--red);
 }
 
 /* Backup Downloader */
