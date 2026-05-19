@@ -8,6 +8,7 @@ function resolveMinecraftDir(): string {
 }
 
 const minecraftDir = resolveMinecraftDir();
+const serverManagerDir = path.join(minecraftDir, 'mc-server-manager');
 
 export const config = {
   port: parseInt(process.env.PORT || '3001', 10),
@@ -24,4 +25,6 @@ export const config = {
   screenSession: process.env.MC_SCREEN_SESSION || 'minecraft',
   metricsIntervalMs: 5000,
   maxConsoleLogLimit: 1000,
+  serverManagerDir,
+  serverInfoPath: path.join(serverManagerDir, 'server-info.json'),
 } as const;

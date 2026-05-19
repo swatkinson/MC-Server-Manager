@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useStartupScript } from '../hooks/useStartupScript';
+import { StartupScriptConfig } from '../types/api';
 import '../styles/config-panel.css';
 
 interface JVMParametersEditorProps {
@@ -7,21 +9,53 @@ interface JVMParametersEditorProps {
   serverRunning?: boolean;
 }
 
-const EXAMPLE_PARAMETERS = [
-  { name: 'Heap Size (Max)', value: '-Xmx4G', description: 'Maximum heap memory allocation' },
-  { name: 'Heap Size (Min)', value: '-Xms4G', description: 'Initial heap memory allocation' },
-  { name: 'GC Type', value: '-XX:+UseG1GC', description: 'Use G1 Garbage Collector' },
-  { name: 'GC Parallel Threads', value: '-XX:ParallelGCThreads=4', description: 'Number of GC threads' },
-];
+function buildPreview(xms: string, xmx: string, jar: string, extraFlags: string): string {
+  const parts = ['java'];
+  if (xms) parts.push(`-Xms${xms}`);
+  if (xmx) parts.push(`-Xmx${xmx}`);
+  if (extraFlags.trim()) parts.push(extraFlags.trim());
+  if (jar) parts.push('-jar', jar, 'nogui');
+  return parts.join(' ');
+}
 
 export const JVMParametersEditor: React.FC<JVMParametersEditorProps> = ({
   isOpen,
   onClose,
   serverRunning = false,
 }) => {
-  const [expanded, setExpanded] = useState(false);
+  const { config, loading, saving, saveError, save } = useStartupScript();
+
+  const [xms, setXms] = useState('');
+  const [xmx, setXmx] = useState('');
+  const [jar, setJar] = useState('');
+  const [extraFlags, setExtraFlags] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (config) {
+      setXms(config.xms);
+      setXmx(config.xmx);
+      setJar(config.jar);
+      setExtraFlags(config.extraFlags);
+    }
+  }, [config]);
 
   if (!isOpen) return null;
+
+  const preview = buildPreview(xms, xmx, jar, extraFlags);
+  const isDirty =
+    xms !== (config?.xms ?? '') ||
+    xmx !== (config?.xmx ?? '') ||
+    jar !== (config?.jar ?? '') ||
+    extraFlags !== (config?.extraFlags ?? '');
+
+  async function handleSave() {
+    const ok = await save({ xms, xmx, jar, extraFlags });
+    if (ok) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }
+  }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -34,69 +68,91 @@ export const JVMParametersEditor: React.FC<JVMParametersEditorProps> = ({
         {serverRunning && (
           <div className="modal__warning">
             <span className="modal__warning-icon">⚠</span>
-            <span>JVM parameter changes require server restart to take effect</span>
+            <span>Changes require a server restart to take effect</span>
           </div>
         )}
 
         <div className="modal__content">
-          <div className="jvm-section">
-            <h3 className="jvm-section__title">Startup Parameters</h3>
-            <p className="jvm-section__description">
-              JVM parameters are defined in the <code className="jvm-section__path">start.sh</code> script.
-              To change them, edit that script directly and restart the server.
-            </p>
-          </div>
-
-          <div className="jvm-section">
-            <button
-              className="jvm-section__toggle"
-              onClick={() => setExpanded(!expanded)}
-            >
-              <span className="jvm-section__toggle-icon">{expanded ? '▼' : '▶'}</span>
-              Common JVM Parameters
-            </button>
-
-            {expanded && (
-              <div className="jvm-parameters-list">
-                {EXAMPLE_PARAMETERS.map((param, idx) => (
-                  <div key={idx} className="jvm-parameter">
-                    <div className="jvm-parameter__header">
-                      <span className="jvm-parameter__name">{param.name}</span>
-                      <code className="jvm-parameter__value">{param.value}</code>
-                    </div>
-                    <p className="jvm-parameter__description">{param.description}</p>
-                  </div>
-                ))}
+          {loading ? (
+            <p className="jvm-section__description">Loading startup script…</p>
+          ) : (
+            <>
+              <div className="jvm-section">
+                <h3 className="jvm-section__title">Memory</h3>
+                <div className="jvm-fields">
+                  <label className="jvm-field">
+                    <span className="jvm-field__label">Startup RAM <code>-Xms</code></span>
+                    <input
+                      className="jvm-field__input"
+                      type="text"
+                      value={xms}
+                      onChange={e => setXms(e.target.value)}
+                      placeholder="e.g. 2G"
+                    />
+                  </label>
+                  <label className="jvm-field">
+                    <span className="jvm-field__label">Max RAM <code>-Xmx</code></span>
+                    <input
+                      className="jvm-field__input"
+                      type="text"
+                      value={xmx}
+                      onChange={e => setXmx(e.target.value)}
+                      placeholder="e.g. 8G"
+                    />
+                  </label>
+                </div>
               </div>
-            )}
-          </div>
 
-          <div className="jvm-section">
-            <h3 className="jvm-section__title">Example Startup Command</h3>
-            <code className="jvm-command-example">
-              java -Xmx4G -Xms4G -XX:+UseG1GC -XX:ParallelGCThreads=4 -jar server.jar nogui
-            </code>
-          </div>
+              <div className="jvm-section">
+                <h3 className="jvm-section__title">JAR File</h3>
+                <label className="jvm-field">
+                  <span className="jvm-field__label">JAR filename</span>
+                  <input
+                    className="jvm-field__input"
+                    type="text"
+                    value={jar}
+                    onChange={e => setJar(e.target.value)}
+                    placeholder="e.g. paper-1.21.jar"
+                  />
+                </label>
+              </div>
 
-          <div className="jvm-section">
-            <h3 className="jvm-section__title">Memory Recommendation</h3>
-            <div className="jvm-recommendation">
-              <p>
-                For a production server, allocate at least 2GB per 20 players, plus extra overhead:
-              </p>
-              <ul>
-                <li>20-30 players: 4GB minimum</li>
-                <li>30-50 players: 6-8GB recommended</li>
-                <li>50+ players: 10GB+ recommended</li>
-              </ul>
-            </div>
-          </div>
+              <div className="jvm-section">
+                <h3 className="jvm-section__title">Extra JVM Flags</h3>
+                <textarea
+                  className="jvm-field__textarea"
+                  value={extraFlags}
+                  onChange={e => setExtraFlags(e.target.value)}
+                  placeholder="-XX:+UseG1GC -XX:ParallelGCThreads=4"
+                  rows={3}
+                />
+              </div>
+
+              <div className="jvm-section">
+                <h3 className="jvm-section__title">Command Preview</h3>
+                <code className="jvm-command-example">{preview || '(fill in the fields above)'}</code>
+              </div>
+
+              {saveError && (
+                <p className="jvm-error">{saveError}</p>
+              )}
+            </>
+          )}
         </div>
 
         <div className="modal__footer">
           <button className="btn btn--gray" onClick={onClose}>
             Close
           </button>
+          {!loading && (
+            <button
+              className="btn btn--primary"
+              onClick={handleSave}
+              disabled={saving || !isDirty || !jar.trim()}
+            >
+              {saving ? 'Saving…' : saved ? 'Saved!' : 'Save to start.sh'}
+            </button>
+          )}
         </div>
       </div>
     </div>

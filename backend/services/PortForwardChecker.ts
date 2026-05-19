@@ -34,7 +34,7 @@ async function readServerPort(): Promise<number> {
   }
 }
 
-async function getPublicIp(): Promise<string | null> {
+async function fetchPublicIp(): Promise<string | null> {
   try {
     const data = (await fetchJson('https://api.ipify.org?format=json')) as { ip?: string };
     return typeof data?.ip === 'string' && data.ip.length > 0 ? data.ip : null;
@@ -44,6 +44,9 @@ async function getPublicIp(): Promise<string | null> {
 }
 
 export class PortForwardChecker {
+  async getPublicIp(): Promise<string | null> {
+    return fetchPublicIp();
+  }
   private inFlight = false;
   private startupCheckTimer: NodeJS.Timeout | null = null;
 
@@ -60,7 +63,7 @@ export class PortForwardChecker {
     this.inFlight = true;
     const port = await readServerPort();
     try {
-      const publicIp = await getPublicIp();
+      const publicIp = await fetchPublicIp();
       if (!publicIp) {
         return {
           ok: null,

@@ -13,6 +13,7 @@ interface ServerHeaderProps {
   tps?: TpsMetrics | null;
   loading?: boolean;
   actions?: React.ReactNode;
+  publicIp?: string | null;
 }
 
 function tpsColor(tps: number | null): string {
@@ -22,7 +23,7 @@ function tpsColor(tps: number | null): string {
   return 'var(--red)';
 }
 
-export const ServerHeader: React.FC<ServerHeaderProps> = ({ status, tps, loading = false, actions }) => {
+export const ServerHeader: React.FC<ServerHeaderProps> = ({ status, tps, loading = false, actions, publicIp }) => {
   if (loading || !status) {
     return (
       <div className="server-header">
@@ -60,7 +61,7 @@ export const ServerHeader: React.FC<ServerHeaderProps> = ({ status, tps, loading
         <div className="server-header__title-group">
           <div className="server-header__title-block">
             <h1 className="server-header__name">{status.motd || 'Minecraft Server'}</h1>
-            <p className="server-header__description">{status.ip}</p>
+            <p className="server-header__description">{publicIp ?? status.ip}</p>
           </div>
           {actions && <div className="server-header__status-cluster">{actions}</div>}
         </div>

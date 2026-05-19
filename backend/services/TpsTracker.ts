@@ -1,4 +1,4 @@
-import { LogLine, TpsMetrics } from '../types/index.js';
+import { LogLine, TpsMetrics, ServerType } from '../types/index.js';
 import { ConsoleManager } from './ConsoleManager.js';
 
 const POLL_INTERVAL_MS = 10_000;
@@ -24,11 +24,31 @@ export class TpsTracker {
   private lastPollMs = 0;
   private pollTimer: NodeJS.Timeout | null = null;
   private isRunningProbe: (() => Promise<boolean>) | null = null;
+  private serverTypeProvider: (() => Promise<ServerType>) | null = null;
 
   constructor(private readonly consoleManager: ConsoleManager) {}
 
   setRunningProbe(probe: () => Promise<boolean>): void {
     this.isRunningProbe = probe;
+  }
+
+  setServerTypeProvider(provider: () => Promise<ServerType>): void {
+    this.serverTypeProvider = provider;
+  }
+
+  private async commandsForCurrentType(): Promise<string[]> {
+    if (!this.serverTypeProvider) return ['tps', 'mspt', 'forge tps'];
+    const type = await this.serverTypeProvider();
+    switch (type) {
+      case 'forge': return ['forge tps'];
+      case 'vanilla': return [];
+      case 'paper':
+      case 'purpur':
+      case 'spigot':
+      case 'craftbukkit': return ['tps', 'mspt'];
+      case 'fabric': return ['tps'];  // Carpet mod uses /tps
+      default: return ['tps', 'mspt', 'forge tps'];
+    }
   }
 
   start(): void {
@@ -149,9 +169,8 @@ export class TpsTracker {
       }
     }
     this.lastPollMs = Date.now();
-    // Send each known command. The server runs whichever it understands and
-    // ignores the rest (logged at INFO as "Unknown command" — harmless).
-    for (const command of ['tps', 'mspt', 'forge tps']) {
+    const commands = await this.commandsForCurrentType();
+    for (const command of commands) {
       try {
         await this.consoleManager.executeCommand(command);
       } catch {

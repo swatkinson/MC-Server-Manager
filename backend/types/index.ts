@@ -84,3 +84,27 @@ export interface WhitelistData {
   entries: WhitelistEntry[];
   enabled: boolean;
 }
+
+export type ServerType =
+  | 'vanilla'
+  | 'paper'
+  | 'purpur'
+  | 'spigot'
+  | 'craftbukkit'
+  | 'fabric'
+  | 'forge'
+  | 'unknown';
+
+export interface ServerInfo {
+  version: string;
+  serverType: ServerType;
+  updatedAt: number;
+}
+
+export interface StartupScriptConfig {
+  xms: string;
+  xmx: string;
+  jar: string;
+  extraFlags: string;
+  rawCommand: string;
+}
