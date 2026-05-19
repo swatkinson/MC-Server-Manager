@@ -8,3 +8,4 @@ export { useMetrics } from './useMetrics';
 export { useServerConfig } from './useServerConfig';
 export { useWhitelist } from './useWhitelist';
 export { useWorldBackup } from './useWorldBackup';
+export { useAccounts } from './useAccounts';

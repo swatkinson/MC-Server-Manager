@@ -9,6 +9,7 @@ function resolveMinecraftDir(): string {
 
 const minecraftDir = resolveMinecraftDir();
 const serverManagerDir = path.join(minecraftDir, 'mc-server-manager');
+const storagePath = process.env.STORAGE_PATH || minecraftDir;
 
 export const config = {
   port: parseInt(process.env.PORT || '3001', 10),
@@ -21,9 +22,11 @@ export const config = {
   whitelistPath: path.join(minecraftDir, 'whitelist.json'),
   opsPath: path.join(minecraftDir, 'ops.json'),
   startScript: path.join(minecraftDir, 'start.sh'),
-  storagePath: process.env.STORAGE_PATH || minecraftDir,
-  restartSchedulePath: path.join(minecraftDir, 'mc-server-manager', 'restart-schedule.json'),
+  storagePath,
+  usersPath: path.join(storagePath, 'users.json'),
+  restartSchedulePath: path.join(serverManagerDir, 'restart-schedule.json'),
   screenSession: process.env.MC_SCREEN_SESSION || 'minecraft',
+  jwtSecret: process.env.JWT_SECRET ?? '',
   metricsIntervalMs: 5000,
   maxConsoleLogLimit: 1000,
   serverManagerDir,

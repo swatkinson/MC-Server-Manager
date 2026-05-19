@@ -10,8 +10,8 @@ let refCount = 0;
 function getSocket(): Socket {
   if (sharedSocket) return sharedSocket;
 
-  const socketUrl = import.meta.env.PROD ? window.location.origin : 'http://localhost:3001';
-  sharedSocket = io(socketUrl, {
+  sharedSocket = io(window.location.origin, {
+    withCredentials: true,
     reconnection: true,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
@@ -37,13 +37,20 @@ export function useServerSocket(): UseServerSocketResult {
 
     const handleConnect = () => setConnected(true);
     const handleDisconnect = () => setConnected(false);
+    const handleConnectError = (err: Error) => {
+      if (err.message === 'Unauthorized') {
+        window.dispatchEvent(new Event('auth:unauthorized'));
+      }
+    };
 
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
+    socket.on('connect_error', handleConnectError);
 
     return () => {
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
+      socket.off('connect_error', handleConnectError);
       refCount -= 1;
       if (refCount === 0 && sharedSocket) {
         sharedSocket.close();

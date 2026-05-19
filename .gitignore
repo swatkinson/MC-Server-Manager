@@ -22,3 +22,6 @@ pnpm-debug.log*
 
 # typescript
 *.tsbuildinfo
+
+# auth data (never commit password hashes)
+users.json

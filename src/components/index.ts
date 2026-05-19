@@ -10,3 +10,4 @@ export { ServerPropertiesEditor } from './ServerPropertiesEditor';
 export { WhitelistManager } from './WhitelistManager';
 export { JVMParametersEditor } from './JVMParametersEditor';
 export { WorldBackupDownloader } from './WorldBackupDownloader';
+export { UserMenu } from './UserMenu';

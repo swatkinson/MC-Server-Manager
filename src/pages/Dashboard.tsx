@@ -4,6 +4,7 @@ import { ConsolePanel } from '../components/ConsolePanel'
 import { PlayerList } from '../components/PlayerList'
 import { MetricsGauges } from '../components/MetricsGauges'
 import { ConfigPanel } from '../components/ConfigPanel'
+import { UserMenu } from '../components/UserMenu'
 import { useMetrics } from '../hooks/useMetrics'
 import { useServerStatus } from '../hooks/useServerStatus'
 import { useStartupChecks } from '../hooks/usePreflight'
@@ -25,12 +26,15 @@ export function Dashboard() {
         loading={statusLoading}
         publicIp={publicIp}
         actions={
-          <ControlButtons
-            status={status}
-            loading={statusLoading}
-            onStatusChange={refetchStatus}
-            compact
-          />
+          <>
+            <ControlButtons
+              status={status}
+              loading={statusLoading}
+              onStatusChange={refetchStatus}
+              compact
+            />
+            <UserMenu />
+          </>
         }
       />
 
