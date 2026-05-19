@@ -4,10 +4,26 @@ import { RestartSchedule, RestartScheduleResult } from '../types/index.js';
 import { config } from '../config.js';
 import { ServerManager } from './ServerManager.js';
 
-const MAX_INTERVAL_HOURS = 168; // 1 week
+const DEFAULT_HOUR = 4;
+const DEFAULT_MINUTE = 0;
+
+function computeNext(hour: number, minute: number): Date {
+  const now = new Date();
+  const candidate = new Date();
+  candidate.setHours(hour, minute, 0, 0);
+  if (candidate.getTime() <= now.getTime()) {
+    candidate.setDate(candidate.getDate() + 1);
+  }
+  return candidate;
+}
 
 export class RestartScheduler {
-  private schedule: RestartSchedule = { enabled: false, intervalHours: 6, nextRestart: null };
+  private schedule: RestartSchedule = {
+    enabled: false,
+    hour: DEFAULT_HOUR,
+    minute: DEFAULT_MINUTE,
+    nextRestart: null,
+  };
   private fiveMinTimer: NodeJS.Timeout | null = null;
   private oneMinTimer: NodeJS.Timeout | null = null;
   private restartTimer: NodeJS.Timeout | null = null;
@@ -23,12 +39,14 @@ export class RestartScheduler {
       const parsed = JSON.parse(raw) as Partial<RestartSchedule>;
       if (
         typeof parsed.enabled === 'boolean' &&
-        typeof parsed.intervalHours === 'number' &&
+        typeof parsed.hour === 'number' &&
+        typeof parsed.minute === 'number' &&
         (parsed.nextRestart === null || typeof parsed.nextRestart === 'string')
       ) {
         this.schedule = {
           enabled: parsed.enabled,
-          intervalHours: parsed.intervalHours,
+          hour: parsed.hour,
+          minute: parsed.minute,
           nextRestart: parsed.nextRestart ?? null,
         };
       }
@@ -36,22 +54,12 @@ export class RestartScheduler {
       // File doesn't exist or is malformed — start with defaults
     }
 
-    if (!this.schedule.enabled || !this.schedule.nextRestart) return;
+    if (!this.schedule.enabled) return;
 
-    const storedNext = new Date(this.schedule.nextRestart).getTime();
-    const now = Date.now();
-    const intervalMs = this.schedule.intervalHours * 3600 * 1000;
-
-    if (storedNext > now) {
-      this.armTimers(storedNext - now);
-    } else {
-      const elapsed = now - storedNext;
-      const missedIntervals = Math.ceil(elapsed / intervalMs);
-      const newNext = storedNext + missedIntervals * intervalMs;
-      this.schedule.nextRestart = new Date(newNext).toISOString();
-      await this.persist();
-      this.armTimers(newNext - now);
-    }
+    const next = computeNext(this.schedule.hour, this.schedule.minute);
+    this.schedule.nextRestart = next.toISOString();
+    await this.persist();
+    this.armTimers(next.getTime() - Date.now());
   }
 
   getSchedule(): RestartSchedule {
@@ -59,42 +67,33 @@ export class RestartScheduler {
   }
 
   async setSchedule(patch: Partial<RestartSchedule>): Promise<RestartScheduleResult> {
-    const intervalHours =
-      patch.intervalHours !== undefined ? patch.intervalHours : this.schedule.intervalHours;
+    const hour = patch.hour !== undefined ? patch.hour : this.schedule.hour;
+    const minute = patch.minute !== undefined ? patch.minute : this.schedule.minute;
 
-    if (
-      typeof intervalHours !== 'number' ||
-      !isFinite(intervalHours) ||
-      intervalHours <= 0 ||
-      intervalHours > MAX_INTERVAL_HOURS
-    ) {
-      return { success: false, message: `intervalHours must be between 1 and ${MAX_INTERVAL_HOURS}` };
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+      return { success: false, message: 'hour must be an integer between 0 and 23' };
+    }
+    if (!Number.isInteger(minute) || minute < 0 || minute > 59) {
+      return { success: false, message: 'minute must be an integer between 0 and 59' };
     }
 
     const enabled = patch.enabled !== undefined ? patch.enabled : this.schedule.enabled;
-    const wasEnabled = this.schedule.enabled;
 
-    this.schedule.intervalHours = intervalHours;
+    this.schedule.hour = hour;
+    this.schedule.minute = minute;
     this.schedule.enabled = enabled;
 
-    if (!enabled) {
-      this.schedule.nextRestart = null;
-    } else if (!wasEnabled || !this.schedule.nextRestart) {
-      // Enabling from disabled state — compute first restart from now
-      this.schedule.nextRestart = new Date(Date.now() + intervalHours * 3600 * 1000).toISOString();
-    } else if (patch.intervalHours !== undefined && patch.intervalHours !== intervalHours) {
-      // Interval changed while already enabled — rebase nextRestart from now
-      this.schedule.nextRestart = new Date(Date.now() + intervalHours * 3600 * 1000).toISOString();
-    }
-
     this.clearTimers();
-    await this.persist();
 
-    if (this.schedule.enabled && this.schedule.nextRestart) {
-      const msUntilRestart = new Date(this.schedule.nextRestart).getTime() - Date.now();
-      this.armTimers(msUntilRestart);
+    if (enabled) {
+      const next = computeNext(hour, minute);
+      this.schedule.nextRestart = next.toISOString();
+      this.armTimers(next.getTime() - Date.now());
+    } else {
+      this.schedule.nextRestart = null;
     }
 
+    await this.persist();
     this.onScheduleChanged({ ...this.schedule });
     return { success: true, message: 'Schedule updated', schedule: { ...this.schedule } };
   }
@@ -119,13 +118,9 @@ export class RestartScheduler {
       }, oneMinMs);
     }
 
-    if (msUntilRestart > 0) {
-      this.restartTimer = setTimeout(() => {
-        void this.executeRestart();
-      }, msUntilRestart);
-    } else {
+    this.restartTimer = setTimeout(() => {
       void this.executeRestart();
-    }
+    }, Math.max(0, msUntilRestart));
   }
 
   private async executeRestart(): Promise<void> {
@@ -140,17 +135,14 @@ export class RestartScheduler {
   }
 
   private async scheduleNext(): Promise<void> {
-    if (!this.schedule.enabled || !this.schedule.nextRestart) return;
+    if (!this.schedule.enabled) return;
 
-    const intervalMs = this.schedule.intervalHours * 3600 * 1000;
-    const prevNext = new Date(this.schedule.nextRestart).getTime();
-    this.schedule.nextRestart = new Date(prevNext + intervalMs).toISOString();
+    const next = computeNext(this.schedule.hour, this.schedule.minute);
+    this.schedule.nextRestart = next.toISOString();
 
     await this.persist();
     this.onScheduleChanged({ ...this.schedule });
-
-    const msUntilRestart = new Date(this.schedule.nextRestart).getTime() - Date.now();
-    this.armTimers(msUntilRestart);
+    this.armTimers(next.getTime() - Date.now());
   }
 
   private sendWarning(command: string): void {

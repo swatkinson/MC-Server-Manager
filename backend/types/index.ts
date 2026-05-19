@@ -111,7 +111,8 @@ export interface StartupScriptConfig {
 
 export interface RestartSchedule {
   enabled: boolean;
-  intervalHours: number;
+  hour: number;   // 0-23, server local time
+  minute: number; // 0-59
   nextRestart: string | null; // ISO 8601, null when disabled
 }
 
