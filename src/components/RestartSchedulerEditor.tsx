@@ -6,7 +6,13 @@ interface RestartSchedulerEditorProps {
   onClose: () => void;
 }
 
-const PRESETS = [3, 6, 12, 24];
+function pad(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+function toTimeValue(hour: number, minute: number): string {
+  return `${pad(hour)}:${pad(minute)}`;
+}
 
 function formatCountdown(isoString: string): string {
   const ms = new Date(isoString).getTime() - Date.now();
@@ -26,15 +32,13 @@ export const RestartSchedulerEditor: React.FC<RestartSchedulerEditorProps> = ({
   const { schedule, loading, saving, updateSchedule, triggerRestart } = useRestartScheduler();
 
   const [enabled, setEnabled] = useState(false);
-  const [intervalHours, setIntervalHours] = useState(6);
-  const [customInput, setCustomInput] = useState('');
+  const [timeValue, setTimeValue] = useState('04:00');
   const [countdown, setCountdown] = useState('');
 
   useEffect(() => {
     if (schedule) {
       setEnabled(schedule.enabled);
-      setIntervalHours(schedule.intervalHours);
-      setCustomInput(String(schedule.intervalHours));
+      setTimeValue(toTimeValue(schedule.hour, schedule.minute));
     }
   }, [schedule]);
 
@@ -49,30 +53,18 @@ export const RestartSchedulerEditor: React.FC<RestartSchedulerEditorProps> = ({
     return () => clearInterval(id);
   }, [schedule?.nextRestart, schedule?.enabled]);
 
-  const handlePreset = useCallback((h: number) => {
-    setIntervalHours(h);
-    setCustomInput(String(h));
-  }, []);
-
-  const handleCustomChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setCustomInput(e.target.value);
-    const val = parseInt(e.target.value, 10);
-    if (Number.isFinite(val) && val >= 1 && val <= 168) {
-      setIntervalHours(val);
-    }
-  }, []);
-
   const handleSave = useCallback(async () => {
-    await updateSchedule({ enabled, intervalHours });
-  }, [updateSchedule, enabled, intervalHours]);
+    const [hourStr, minuteStr] = timeValue.split(':');
+    const hour = parseInt(hourStr, 10);
+    const minute = parseInt(minuteStr, 10);
+    await updateSchedule({ enabled, hour, minute });
+  }, [updateSchedule, enabled, timeValue]);
 
   const handleRestart = useCallback(async () => {
     await triggerRestart();
   }, [triggerRestart]);
 
   if (!isOpen) return null;
-
-  const isPreset = PRESETS.includes(intervalHours);
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -92,9 +84,9 @@ export const RestartSchedulerEditor: React.FC<RestartSchedulerEditorProps> = ({
               <div className="whitelist-section">
                 <div className="whitelist-toggle">
                   <div className="whitelist-toggle__label">
-                    <span>Automatic restarts</span>
+                    <span>Daily automatic restart</span>
                     <span className="whitelist-toggle__description">
-                      Restart the server on a fixed interval
+                      Restart the server once per day at the configured time
                     </span>
                   </div>
                   <button
@@ -102,7 +94,7 @@ export const RestartSchedulerEditor: React.FC<RestartSchedulerEditorProps> = ({
                     onClick={() => setEnabled((v) => !v)}
                     disabled={saving}
                     aria-pressed={enabled}
-                    aria-label="Toggle automatic restarts"
+                    aria-label="Toggle automatic restart"
                   >
                     <span className="toggle__slider" />
                   </button>
@@ -110,30 +102,15 @@ export const RestartSchedulerEditor: React.FC<RestartSchedulerEditorProps> = ({
               </div>
 
               <div className="whitelist-section">
-                <p className="whitelist-section__title">Restart interval</p>
-                <div className="scheduler-presets">
-                  {PRESETS.map((h) => (
-                    <button
-                      key={h}
-                      className={`btn btn--small${intervalHours === h ? ' btn--blue' : ' btn--gray'}`}
-                      onClick={() => handlePreset(h)}
-                      disabled={saving || !enabled}
-                    >
-                      {h}h
-                    </button>
-                  ))}
-                  <input
-                    type="number"
-                    className={`property-input scheduler-custom-input${!isPreset ? ' scheduler-custom-input--active' : ''}`}
-                    min={1}
-                    max={168}
-                    value={customInput}
-                    onChange={handleCustomChange}
-                    disabled={saving || !enabled}
-                    aria-label="Custom interval in hours"
-                    placeholder="Custom (h)"
-                  />
-                </div>
+                <p className="whitelist-section__title">Restart time (server local time)</p>
+                <input
+                  type="time"
+                  className="property-input scheduler-time-input"
+                  value={timeValue}
+                  onChange={(e) => setTimeValue(e.target.value)}
+                  disabled={saving || !enabled}
+                  aria-label="Daily restart time"
+                />
               </div>
 
               {enabled && schedule?.nextRestart && (
