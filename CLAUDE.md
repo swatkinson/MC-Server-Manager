@@ -83,6 +83,8 @@ CSS uses flat custom properties (`--bg`, `--bg-card`, `--border`, `--text`, `--t
 
 **README updates:** After every meaningful change, update `README.md` — check off implemented features, add new ones, update the Tech Stack table if dependencies changed.
 
+**CLAUDE.md updates:** Keep this file current — if the architecture, commands, services, patterns, or conventions change, update the relevant section here so future sessions start with accurate context.
+
 **Adding a new page/route:** Create the component in `src/pages/`, register the route in `src/main.tsx`, update README.
 
 **CI/CD:** `.github/workflows/deploy.yml` runs on every push to `main` — rsyncs the build to the server and restarts the `mc-server-manager` systemd unit. If the build output or command changes, update the workflow too.
