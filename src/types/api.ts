@@ -106,3 +106,25 @@ export interface StartupScriptConfig {
   extraFlags: string;
   rawCommand: string;
 }
+
+export interface WhitelistEntry {
+  uuid: string;
+  name: string;
+}
+
+export interface WhitelistData {
+  entries: WhitelistEntry[];
+  enabled: boolean;
+}
+
+export interface RestartSchedule {
+  enabled: boolean;
+  intervalHours: number;
+  nextRestart: string | null; // ISO 8601, null when disabled
+}
+
+export interface RestartScheduleResult {
+  success: boolean;
+  message: string;
+  schedule?: RestartSchedule;
+}

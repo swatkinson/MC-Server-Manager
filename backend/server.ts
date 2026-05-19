@@ -16,6 +16,7 @@ import { TpsTracker } from './services/TpsTracker.js';
 import { PortForwardChecker } from './services/PortForwardChecker.js';
 import { ServerInfoStore } from './services/ServerInfoStore.js';
 import { StartupScriptManager } from './services/StartupScriptManager.js';
+import { RestartScheduler } from './services/RestartScheduler.js';
 import { config } from './config.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -37,6 +38,10 @@ const playerManager = new PlayerManager();
 const tpsTracker = new TpsTracker(consoleManager);
 const portForwardChecker = new PortForwardChecker();
 const startupScriptManager = new StartupScriptManager();
+const restartScheduler = new RestartScheduler(
+  serverManager,
+  (schedule) => io.emit('scheduler:updated', schedule),
+);
 
 metricsCollector.setTpsProvider(() => tpsTracker.getMetrics());
 
@@ -370,6 +375,13 @@ app.get(
   }),
 );
 
+app.get(
+  '/api/scheduler/restart',
+  asyncRoute(async (_req, res) => {
+    res.json({ schedule: restartScheduler.getSchedule() });
+  }),
+);
+
 app.post(
   '/api/config/startup-script',
   asyncRoute(async (req, res) => {
@@ -388,6 +400,32 @@ app.post(
       res.json({ success: true });
     } catch (error) {
       fail(res, 500, 'Failed to write startup script', error);
+    }
+  }),
+);
+
+app.post(
+  '/api/scheduler/restart',
+  asyncRoute(async (req, res) => {
+    const result = await restartScheduler.setSchedule(req.body ?? {});
+    res.status(result.success ? 200 : 400).json(result);
+  }),
+);
+
+app.post(
+  '/api/scheduler/restart/now',
+  asyncRoute(async (_req, res) => {
+    try {
+      const result = await serverManager.restart();
+      io.emit('server:status:changed', result);
+      if (result.success) {
+        portForwardChecker.scheduleStartupCheck((checkResult) => {
+          io.emit('portforward:result', checkResult);
+        });
+      }
+      res.json(result);
+    } catch (error) {
+      fail(res, 500, 'Failed to restart server', error);
     }
   }),
 );
@@ -439,6 +477,10 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (!res.headersSent) res.status(500).json({ error: 'Internal server error' });
 });
 
+restartScheduler.init().catch((err) => {
+  console.error('Failed to initialize restart scheduler:', err);
+});
+
 httpServer.listen(config.port, () => {
   console.log(`MC Server Manager running on port ${config.port} (${config.nodeEnv})`);
 });
@@ -447,6 +489,8 @@ function shutdown(signal: string): void {
   console.log(`Received ${signal}, shutting down gracefully...`);
   if (metricsInterval) clearInterval(metricsInterval);
   consoleManager.stop();
+  tpsTracker.stop();
+  restartScheduler.stop();
   portForwardChecker.cancelStartupCheck();
   io.close();
   httpServer.close(() => process.exit(0));

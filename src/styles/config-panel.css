@@ -7,13 +7,13 @@
 
 .config-panel__buttons {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 0.5rem;
 }
 
 @media (max-width: 1280px) {
   .config-panel__buttons {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
@@ -70,6 +70,29 @@
 
 .config-button--backup:hover {
   border-color: var(--yellow);
+}
+
+.config-button--scheduler:hover {
+  border-color: var(--purple);
+}
+
+/* Restart Scheduler */
+.scheduler-presets {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.scheduler-custom-input {
+  width: 100px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.scheduler-custom-input--active {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
 /* Modal Overlay */
@@ -974,6 +997,7 @@
   .config-panel__buttons {
     grid-template-columns: repeat(2, 1fr);
   }
+
 
   .modal {
     max-width: 95%;
