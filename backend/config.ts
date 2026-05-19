@@ -22,6 +22,7 @@ export const config = {
   opsPath: path.join(minecraftDir, 'ops.json'),
   startScript: path.join(minecraftDir, 'start.sh'),
   storagePath: process.env.STORAGE_PATH || minecraftDir,
+  restartSchedulePath: path.join(minecraftDir, 'mc-server-manager', 'restart-schedule.json'),
   screenSession: process.env.MC_SCREEN_SESSION || 'minecraft',
   metricsIntervalMs: 5000,
   maxConsoleLogLimit: 1000,
