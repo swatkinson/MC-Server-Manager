@@ -38,9 +38,6 @@ const tpsTracker = new TpsTracker(consoleManager);
 const portForwardChecker = new PortForwardChecker();
 const startupScriptManager = new StartupScriptManager();
 
-tpsTracker.setRunningProbe(() => serverManager.isRunning());
-tpsTracker.setServerTypeProvider(() => infoStore.getServerType());
-tpsTracker.start();
 metricsCollector.setTpsProvider(() => tpsTracker.getMetrics());
 
 app.use(cors());
@@ -450,7 +447,6 @@ function shutdown(signal: string): void {
   console.log(`Received ${signal}, shutting down gracefully...`);
   if (metricsInterval) clearInterval(metricsInterval);
   consoleManager.stop();
-  tpsTracker.stop();
   portForwardChecker.cancelStartupCheck();
   io.close();
   httpServer.close(() => process.exit(0));
