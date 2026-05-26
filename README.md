@@ -26,9 +26,10 @@ VM as the Minecraft server.
 - [x] Server status header with name, IP, MOTD, and status
 - [x] Server control buttons: start / stop / restart
 - [x] Live console display with command input
-- [x] System monitoring gauges: CPU, RAM, Storage
+- [x] System monitoring gauges: CPU, RAM, Storage (arc gauges)
 - [x] Real start / stop / restart (via `screen` + `start.sh`)
 - [x] Live server status (online/offline, uptime)
+- [x] TPS / MSPT monitoring (Paper, Forge, Spark)
 
 ### Phase 3 — Player Management & Configuration
 - [x] Online player list (parsed from server log)
@@ -48,6 +49,13 @@ VM as the Minecraft server.
 - [x] One-shot world backup download
 - [ ] Plugin/mod listing
 - [ ] Automated backup scheduling and management
+
+### Phase 6 — Authentication & Access Control
+- [x] Account-based authentication (JWT cookies)
+- [x] Role-based access control: `admin` / `moderator` / `user`
+  - **admin** — full access including account management
+  - **moderator** — full dashboard access; no Manage Accounts page
+  - **user** — read-only: metrics, player list, console view (no input, no server control)
 
 ---
 
@@ -129,7 +137,7 @@ npm run start        # run the compiled backend
 
 The dashboard is deployed via `.github/workflows/deploy.yml` on a self-hosted
 GitHub Actions runner that lives on the same Ubuntu host as the Minecraft
-server. Every push to `main`:
+server. Every push to `main` (or manual `workflow_dispatch`):
 
 1. Installs deps and runs `npm run build:prod`
 2. Rsyncs `dist/`, `package.json`, `package-lock.json`, and the systemd unit
