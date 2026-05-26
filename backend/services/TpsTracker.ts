@@ -19,9 +19,11 @@ function stripColors(text: string): string {
 export class TpsTracker {
   private tps: number | null = null;
   private mspt: number | null = null;
-  private source: 'paper' | 'forge' | null = null;
+  private source: 'paper' | 'forge' | 'spark' | null = null;
   private lastUpdatedMs = 0;
   private lastPollMs = 0;
+  // Tracks when we last saw a Spark TPS header so we can match the values line
+  private sparkHeaderMs = 0;
   private pollTimer: NodeJS.Timeout | null = null;
   private isRunningProbe: (() => Promise<boolean>) | null = null;
   private serverTypeProvider: (() => Promise<ServerType>) | null = null;
@@ -40,7 +42,9 @@ export class TpsTracker {
     if (!this.serverTypeProvider) return ['tps', 'mspt', 'forge tps'];
     const type = await this.serverTypeProvider();
     switch (type) {
-      case 'forge': return ['forge tps'];
+      // spark tps is tried alongside forge tps; if Spark isn't installed the
+      // "Unknown command" echo is suppressed within the poll window.
+      case 'forge': return ['forge tps', 'spark tps'];
       case 'vanilla': return [];
       case 'paper':
       case 'purpur':
@@ -111,6 +115,25 @@ export class TpsTracker {
       matched = true;
     }
 
+    // Spark `/spark tps` outputs two separate log lines:
+    //   Line 1 (header): "TPS from last 5s, 10s, 1m, 5m, 15m:"
+    //   Line 2 (values): " 20.0, 20.0, 20.0, 20.0, 20.0"
+    // Detect the header and record the timestamp so the values line can be matched next.
+    if (/TPS from last\s+5s\b[^:]*:\s*$/.test(message.trim())) {
+      this.sparkHeaderMs = Date.now();
+      return Date.now() - this.lastPollMs < CONSUME_WINDOW_MS;
+    }
+    if (this.sparkHeaderMs > 0 && Date.now() - this.sparkHeaderMs < 2000) {
+      const sparkVal = message.trim().match(/^(\d+(?:\.\d+)?)[\s,]/);
+      if (sparkVal) {
+        this.tps = parseFloat(sparkVal[1]);
+        this.source = 'spark';
+        this.lastUpdatedMs = Date.now();
+        this.sparkHeaderMs = 0;
+        matched = true;
+      }
+    }
+
     if (matched) return true;
 
     // Within the poll window, also swallow the "Unknown command" feedback
@@ -120,14 +143,18 @@ export class TpsTracker {
 
     // Vanilla / Paper unknown-command echoes with the caret marker, e.g.:
     //   "Unknown or incomplete command, see below for error"
-    //   "tps<--[HERE]" / "mspt<--[HERE]" / "forge<--[HERE]" / "forge tps<--[HERE]"
-    if (/<--\[HERE\]/.test(message) && /\b(tps|mspt|forge)\b/i.test(message)) {
+    //   "tps<--[HERE]" / "mspt<--[HERE]" / "forge<--[HERE]" / "spark<--[HERE]"
+    if (/<--\[HERE\]/.test(message) && /\b(tps|mspt|forge|spark)\b/i.test(message)) {
       return true;
     }
     if (/Unknown or incomplete command/i.test(message)) {
       return true;
     }
-    if (/Unknown command/i.test(message) && /(tps|mspt|forge)/i.test(message)) {
+    if (/Unknown command/i.test(message) && /(tps|mspt|forge|spark)/i.test(message)) {
+      return true;
+    }
+    // Suppress Spark CPU usage lines that accompany `spark tps` output
+    if (/CPU usage from last/i.test(message) || /\(system\)$|\(process\)$/.test(message.trim())) {
       return true;
     }
     // Forge per-dimension lines printed by `/forge tps`:
@@ -184,5 +211,6 @@ export class TpsTracker {
     this.mspt = null;
     this.source = null;
     this.lastUpdatedMs = 0;
+    this.sparkHeaderMs = 0;
   }
 }
