@@ -600,6 +600,16 @@ api.get(
   }),
 );
 
+// ── Production SPA catch-all ─────────────────────────────────────────────────
+// Must be before app.use(api) — the api router runs requireAuth on all
+// requests, which would block unauthenticated users from ever receiving index.html.
+
+if (config.isProduction) {
+  app.get(/^(?!\/api\/).*/, (_req, res) => {
+    res.sendFile(path.join(distRoot, 'index.html'));
+  });
+}
+
 app.use(api);
 
 // ── Socket.IO ────────────────────────────────────────────────────────────────
@@ -641,14 +651,6 @@ io.on('connection', (socket) => {
     console.log('Client disconnected:', socket.id);
   });
 });
-
-// ── Production SPA catch-all ─────────────────────────────────────────────────
-
-if (config.isProduction) {
-  app.get('*', (_req, res) => {
-    res.sendFile(path.join(distRoot, 'index.html'));
-  });
-}
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Unhandled error:', err);
