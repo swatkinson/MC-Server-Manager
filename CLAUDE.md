@@ -38,7 +38,7 @@ All env-driven configuration lives in `backend/config.ts` (`MINECRAFT_DIR`, `MC_
 | `ServerManager` | start/stop/restart, status, uptime, version |
 | `ConsoleManager` | log polling, command execution, player join/leave detection |
 | `MetricsCollector` | CPU (`/proc/stat`), RAM (`/proc/meminfo`), JVM heap (`jstat`), storage (`df`), TPS |
-| `TpsTracker` | Polls `tps`/`mspt`/`forge tps` every 10 s; suppresses TPS probe output from console display |
+| `TpsTracker` | Polls `forge tps` + `spark tps` (Forge), `tps`/`mspt` (Paper) every 10 s; parses Spark's two-line output; suppresses probe output from console |
 | `PlayerManager` | In-memory online player map; reads `ops.json` (60 s TTL cache) |
 | `ConfigManager` | Read/write `server.properties` and `whitelist.json` |
 | `PreflightChecker` | Validates paths and required binaries on startup (`java`, `screen`, `pgrep`, `pkill`, `jstat`) |
@@ -48,7 +48,9 @@ All env-driven configuration lives in `backend/config.ts` (`MINECRAFT_DIR`, `MC_
 
 ### Frontend
 
-Single page: `src/pages/Dashboard.tsx`. TanStack Router is set up in `src/main.tsx` with one route (`/`). `ToastContext` is the only React context.
+Two pages: `src/pages/Dashboard.tsx` (main view) and `src/pages/AccountsPage.tsx` (admin only). TanStack Router is set up in `src/main.tsx`. `ToastContext` and `AuthContext` are the React contexts.
+
+**Role-based access:** Three roles — `admin` (full access), `moderator` (no Manage Accounts), `user` (read-only: metrics, player count, console). `requireRole()` middleware in `backend/middleware/requireAuth.ts` gates routes. Frontend conditionally renders `ControlButtons`, `ConfigPanel`, and `ConsoleInput` based on `user.role` from `useAuth()`.
 
 **Shared Socket.IO singleton:** `useServerSocket` maintains a module-level socket with a ref count. All data hooks (`useMetrics`, `useServerStatus`, `useConsoleLogs`, `usePlayerList`, `useWhitelist`, `useServerConfig`, `usePortForwardCheck`) share this one connection; it disconnects when the last consumer unmounts.
 
