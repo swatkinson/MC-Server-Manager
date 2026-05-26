@@ -3,7 +3,11 @@ import { ConsoleInput } from './ConsoleInput';
 import { useConsoleLogs } from '../hooks/useConsoleLogs';
 import { useConsoleCommand } from '../hooks/useConsoleCommand';
 
-export function ConsolePanel() {
+interface ConsolePanelProps {
+  readOnly?: boolean;
+}
+
+export function ConsolePanel({ readOnly = false }: ConsolePanelProps) {
   const {
     logs,
     loading: logsLoading,
@@ -45,15 +49,17 @@ export function ConsolePanel() {
           error={logsError}
         />
 
-        <ConsoleInput
-          onSubmit={executeCommand}
-          onPreviousCommand={getPreviousCommand}
-          onNextCommand={getNextCommand}
-          onResetHistory={resetHistory}
-          loading={commandLoading}
-          historyLength={historyLength}
-          error={commandError}
-        />
+        {!readOnly && (
+          <ConsoleInput
+            onSubmit={executeCommand}
+            onPreviousCommand={getPreviousCommand}
+            onNextCommand={getNextCommand}
+            onResetHistory={resetHistory}
+            loading={commandLoading}
+            historyLength={historyLength}
+            error={commandError}
+          />
+        )}
       </div>
     </div>
   );

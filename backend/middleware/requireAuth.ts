@@ -25,3 +25,13 @@ export function requireAuth(authService: AuthService) {
     next();
   };
 }
+
+export function requireRole(...roles: Array<'admin' | 'moderator' | 'user'>) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+    next();
+  };
+}

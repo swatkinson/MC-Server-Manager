@@ -25,7 +25,9 @@ function AccountRow({
         {isSelf && <span className="accounts-table__you-badge">you</span>}
       </td>
       <td className="accounts-table__td">
-        <span className="accounts-table__role-badge">Admin</span>
+        <span className="accounts-table__role-badge">
+          {account.role.charAt(0).toUpperCase() + account.role.slice(1)}
+        </span>
       </td>
       <td className="accounts-table__td accounts-table__td--muted">
         {new Date(account.createdAt).toLocaleDateString()}
@@ -68,19 +70,21 @@ function CreateAccountForm({
   onSubmit,
 }: {
   creating: boolean;
-  onSubmit: (username: string, password: string) => Promise<void>;
+  onSubmit: (username: string, password: string, role: 'admin' | 'moderator' | 'user') => Promise<void>;
 }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState<'admin' | 'moderator' | 'user'>('user');
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     try {
-      await onSubmit(username, password);
+      await onSubmit(username, password, role);
       setUsername('');
       setPassword('');
+      setRole('user');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     }
@@ -123,6 +127,22 @@ function CreateAccountForm({
               disabled={creating}
               required
             />
+          </div>
+          <div className="auth-form__field">
+            <label className="auth-form__label" htmlFor="new-role">
+              Role
+            </label>
+            <select
+              id="new-role"
+              className="auth-form__input"
+              value={role}
+              onChange={(e) => setRole(e.target.value as 'admin' | 'moderator' | 'user')}
+              disabled={creating}
+            >
+              <option value="user">User</option>
+              <option value="moderator">Moderator</option>
+              <option value="admin">Admin</option>
+            </select>
           </div>
         </div>
         <button className="btn btn--blue" type="submit" disabled={creating}>
@@ -178,7 +198,7 @@ export function AccountsPage() {
         )}
       </div>
 
-      <CreateAccountForm creating={creating} onSubmit={createUser} />
+      <CreateAccountForm creating={creating} onSubmit={(u, p, r) => createUser(u, p, r)} />
     </div>
   );
 }

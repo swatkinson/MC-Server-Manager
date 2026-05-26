@@ -26,13 +26,13 @@ export class UserStore {
     return users.find((u) => u.username === username) ?? null;
   }
 
-  async create(username: string, passwordHash: string): Promise<User> {
+  async create(username: string, passwordHash: string, role: 'admin' | 'moderator' | 'user' = 'user'): Promise<User> {
     const users = await this.getAll();
     const user: User = {
       id: randomUUID(),
       username,
       passwordHash,
-      role: 'admin',
+      role,
       createdAt: Date.now(),
     };
     users.push(user);

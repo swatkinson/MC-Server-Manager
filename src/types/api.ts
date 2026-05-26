@@ -133,7 +133,7 @@ export interface RestartScheduleResult {
 export interface PublicUser {
   id: string;
   username: string;
-  role: 'admin';
+  role: 'admin' | 'moderator' | 'user';
   createdAt: number;
 }
 

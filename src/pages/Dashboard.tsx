@@ -10,11 +10,13 @@ import { useServerStatus } from '../hooks/useServerStatus'
 import { useStartupChecks } from '../hooks/usePreflight'
 import { usePortForwardCheck } from '../hooks/usePortForwardCheck'
 import { usePublicIp } from '../hooks/usePublicIp'
+import { useAuth } from '../context/AuthContext'
 
 export function Dashboard() {
   const { metrics, loading: metricsLoading, error: metricsError } = useMetrics()
   const { status, loading: statusLoading, refetch: refetchStatus } = useServerStatus()
   const publicIp = usePublicIp()
+  const { user } = useAuth()
   useStartupChecks()
   usePortForwardCheck()
 
@@ -27,12 +29,14 @@ export function Dashboard() {
         publicIp={publicIp}
         actions={
           <>
-            <ControlButtons
-              status={status}
-              loading={statusLoading}
-              onStatusChange={refetchStatus}
-              compact
-            />
+            {user?.role !== 'user' && (
+              <ControlButtons
+                status={status}
+                loading={statusLoading}
+                onStatusChange={refetchStatus}
+                compact
+              />
+            )}
             <UserMenu />
           </>
         }
@@ -45,15 +49,17 @@ export function Dashboard() {
             <MetricsGauges metrics={metrics} loading={metricsLoading} error={metricsError} />
           </section>
 
-          <section className="card">
-            <h2>Configuration</h2>
-            <ConfigPanel serverStatus={status} />
-          </section>
+          {user?.role !== 'user' && (
+            <section className="card">
+              <h2>Configuration</h2>
+              <ConfigPanel serverStatus={status} />
+            </section>
+          )}
         </aside>
 
         <article className="dashboard__content">
           <section className="card dashboard__console">
-            <ConsolePanel />
+            <ConsolePanel readOnly={user?.role === 'user'} />
           </section>
         </article>
 

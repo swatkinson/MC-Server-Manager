@@ -8,7 +8,7 @@ export interface UseAccountsReturn {
   error: string | null;
   creating: boolean;
   deleting: Set<string>;
-  createUser: (username: string, password: string) => Promise<void>;
+  createUser: (username: string, password: string, role?: 'admin' | 'moderator' | 'user') => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
   refetch: () => Promise<void>;
 }
@@ -41,14 +41,14 @@ export function useAccounts(): UseAccountsReturn {
   }, [refetch]);
 
   const createUser = useCallback(
-    async (username: string, password: string) => {
+    async (username: string, password: string, role: 'admin' | 'moderator' | 'user' = 'user') => {
       setCreating(true);
       try {
         const res = await fetch('/api/auth/users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ username, password }),
+          body: JSON.stringify({ username, password, role }),
         });
         const data = (await res.json()) as { user?: PublicUser; error?: string };
         if (!res.ok) throw new Error(data.error ?? 'Failed to create account');

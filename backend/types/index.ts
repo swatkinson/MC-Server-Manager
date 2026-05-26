@@ -126,21 +126,21 @@ export interface User {
   id: string;
   username: string;
   passwordHash: string;
-  role: 'admin';
+  role: 'admin' | 'moderator' | 'user';
   createdAt: number;
 }
 
 export interface PublicUser {
   id: string;
   username: string;
-  role: 'admin';
+  role: 'admin' | 'moderator' | 'user';
   createdAt: number;
 }
 
 export interface TokenPayload {
   sub: string;
   username: string;
-  role: 'admin';
+  role: 'admin' | 'moderator' | 'user';
   iat: number;
   exp: number;
 }
