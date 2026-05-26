@@ -22,7 +22,11 @@ export function useApi<T>(url: string, options?: UseApiOptions): UseApiResult<T>
     try {
       if (!hasLoadedRef.current) setLoading(true);
       setError(null);
-      const response = await globalThis.fetch(url);
+      const response = await globalThis.fetch(url, { credentials: 'include' });
+      if (response.status === 401) {
+        window.dispatchEvent(new Event('auth:unauthorized'));
+        return;
+      }
       if (!response.ok) {
         throw new Error(`Failed to fetch: ${response.statusText}`);
       }
@@ -71,8 +75,14 @@ export async function apiPost<T>(url: string, body: unknown): Promise<T> {
   const response = await globalThis.fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(body),
   });
+
+  if (response.status === 401) {
+    window.dispatchEvent(new Event('auth:unauthorized'));
+    throw new Error('Session expired');
+  }
 
   const parsed = await parseJsonOrNull(response);
 
@@ -84,7 +94,16 @@ export async function apiPost<T>(url: string, body: unknown): Promise<T> {
 }
 
 export async function apiDelete<T>(url: string): Promise<T> {
-  const response = await globalThis.fetch(url, { method: 'DELETE' });
+  const response = await globalThis.fetch(url, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+
+  if (response.status === 401) {
+    window.dispatchEvent(new Event('auth:unauthorized'));
+    throw new Error('Session expired');
+  }
+
   const parsed = await parseJsonOrNull(response);
 
   if (!response.ok) {

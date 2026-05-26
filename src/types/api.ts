@@ -119,13 +119,32 @@ export interface WhitelistData {
 
 export interface RestartSchedule {
   enabled: boolean;
-  hour: number;   // 0-23, server local time
-  minute: number; // 0-59
-  nextRestart: string | null; // ISO 8601, null when disabled
+  hour: number;
+  minute: number;
+  nextRestart: string | null;
 }
 
 export interface RestartScheduleResult {
   success: boolean;
   message: string;
   schedule?: RestartSchedule;
+}
+
+export interface PublicUser {
+  id: string;
+  username: string;
+  role: 'admin';
+  createdAt: number;
+}
+
+export interface LoginResponse {
+  user: PublicUser;
+}
+
+export interface SetupCheckResponse {
+  setupRequired: boolean;
+}
+
+export interface UsersListResponse {
+  users: PublicUser[];
 }
