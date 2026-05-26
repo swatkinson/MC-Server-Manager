@@ -34,7 +34,7 @@ export interface TpsMetrics {
   tps: number | null;
   mspt: number | null;
   headroomPercent: number | null;
-  source: 'paper' | 'forge' | null;
+  source: 'paper' | 'forge' | 'spark' | null;
   lastUpdatedMs: number;
 }
 
