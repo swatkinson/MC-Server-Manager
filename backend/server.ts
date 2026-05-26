@@ -157,7 +157,7 @@ app.post(
     const hash = await authService.hashPassword(password as string);
     const user = await userStore.create(username as string, hash);
     const token = authService.signToken(user);
-    res.cookie(COOKIE_NAME, token, authService.cookieOptions(config.isProduction));
+    res.cookie(COOKIE_NAME, token, authService.cookieOptions(req.secure));
     res.status(201).json({ user: { id: user.id, username: user.username, role: user.role } });
   }),
 );
@@ -177,13 +177,13 @@ app.post(
       return;
     }
     const token = authService.signToken(user);
-    res.cookie(COOKIE_NAME, token, authService.cookieOptions(config.isProduction));
+    res.cookie(COOKIE_NAME, token, authService.cookieOptions(req.secure));
     res.json({ user: { id: user.id, username: user.username, role: user.role } });
   }),
 );
 
-app.post('/api/auth/logout', (_req, res) => {
-  res.clearCookie(COOKIE_NAME, authService.cookieOptions(config.isProduction));
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie(COOKIE_NAME, authService.cookieOptions(req.secure));
   res.json({ ok: true });
 });
 
