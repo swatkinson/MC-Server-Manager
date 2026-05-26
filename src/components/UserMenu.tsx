@@ -36,15 +36,17 @@ export function UserMenu() {
 
       {open && (
         <div className="user-menu__dropdown">
-          <button
-            className="user-menu__item"
-            onClick={() => {
-              setOpen(false);
-              void navigate({ to: '/accounts' });
-            }}
-          >
-            Manage Accounts
-          </button>
+          {user.role === 'admin' && (
+            <button
+              className="user-menu__item"
+              onClick={() => {
+                setOpen(false);
+                void navigate({ to: '/accounts' });
+              }}
+            >
+              Manage Accounts
+            </button>
+          )}
           <button
             className="user-menu__item user-menu__item--danger"
             onClick={() => void handleLogout()}

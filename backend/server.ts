@@ -21,7 +21,7 @@ import { StartupScriptManager } from './services/StartupScriptManager.js';
 import { RestartScheduler } from './services/RestartScheduler.js';
 import { UserStore } from './services/UserStore.js';
 import { AuthService, COOKIE_NAME } from './services/AuthService.js';
-import { requireAuth } from './middleware/requireAuth.js';
+import { requireAuth, requireRole } from './middleware/requireAuth.js';
 import { socketAuthMiddleware } from './middleware/socketAuth.js';
 import { config } from './config.js';
 
@@ -155,7 +155,7 @@ app.post(
       return;
     }
     const hash = await authService.hashPassword(password as string);
-    const user = await userStore.create(username as string, hash);
+    const user = await userStore.create(username as string, hash, 'admin');
     const token = authService.signToken(user);
     res.cookie(COOKIE_NAME, token, authService.cookieOptions(req.secure));
     res.status(201).json({ user: { id: user.id, username: user.username, role: user.role } });
@@ -201,6 +201,7 @@ api.get(
 
 api.get(
   '/api/auth/users',
+  requireRole('admin'),
   asyncRoute(async (_req, res) => {
     const users = await userStore.getAll();
     res.json({
@@ -209,10 +210,13 @@ api.get(
   }),
 );
 
+const VALID_ROLES = new Set<string>(['admin', 'moderator', 'user']);
+
 api.post(
   '/api/auth/users',
+  requireRole('admin'),
   asyncRoute(async (req, res) => {
-    const { username, password } = req.body ?? {};
+    const { username, password, role: rawRole } = req.body ?? {};
     if (!isValidUsername(username)) {
       fail(res, 400, 'Username must be 3–32 characters (letters, numbers, underscore)');
       return;
@@ -221,19 +225,24 @@ api.post(
       fail(res, 400, 'Password must be 8–128 characters');
       return;
     }
+    const role: 'admin' | 'moderator' | 'user' =
+      typeof rawRole === 'string' && VALID_ROLES.has(rawRole)
+        ? (rawRole as 'admin' | 'moderator' | 'user')
+        : 'user';
     const existing = await userStore.getByUsername(username as string);
     if (existing) {
       fail(res, 409, 'Username already taken');
       return;
     }
     const hash = await authService.hashPassword(password as string);
-    const user = await userStore.create(username as string, hash);
+    const user = await userStore.create(username as string, hash, role);
     res.status(201).json({ user: { id: user.id, username: user.username, role: user.role, createdAt: user.createdAt } });
   }),
 );
 
 api.delete(
   '/api/auth/users/:id',
+  requireRole('admin'),
   asyncRoute(async (req, res) => {
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     if (req.user?.sub === id) {
@@ -262,6 +271,7 @@ api.get(
 
 api.post(
   '/api/server/start',
+  requireRole('admin', 'moderator'),
   asyncRoute(async (_req, res) => {
     try {
       const result = await serverManager.start();
@@ -280,6 +290,7 @@ api.post(
 
 api.post(
   '/api/server/stop',
+  requireRole('admin', 'moderator'),
   asyncRoute(async (_req, res) => {
     try {
       const result = await serverManager.stop();
@@ -295,6 +306,7 @@ api.post(
 
 api.post(
   '/api/server/restart',
+  requireRole('admin', 'moderator'),
   asyncRoute(async (_req, res) => {
     try {
       const result = await serverManager.restart();
@@ -375,6 +387,7 @@ api.get(
 
 api.post(
   '/api/console/command',
+  requireRole('admin', 'moderator'),
   asyncRoute(async (req, res) => {
     const { command } = req.body ?? {};
     if (!command || typeof command !== 'string') {
@@ -407,6 +420,7 @@ api.get(
 
 api.post(
   '/api/config/server-properties',
+  requireRole('admin', 'moderator'),
   asyncRoute(async (req, res) => {
     const { properties } = req.body ?? {};
     if (!properties || typeof properties !== 'object') {
@@ -440,6 +454,7 @@ api.get(
 
 api.post(
   '/api/config/whitelist',
+  requireRole('admin', 'moderator'),
   asyncRoute(async (req, res) => {
     const { uuid, name, entries, enabled } = req.body ?? {};
     try {
@@ -466,6 +481,7 @@ api.post(
 
 api.delete(
   '/api/config/whitelist/:uuid',
+  requireRole('admin', 'moderator'),
   asyncRoute(async (req, res) => {
     const rawUuid = req.params.uuid;
     const uuid = Array.isArray(rawUuid) ? rawUuid[0] : rawUuid;
@@ -500,6 +516,7 @@ api.get(
 
 api.post(
   '/api/config/startup-script',
+  requireRole('admin', 'moderator'),
   asyncRoute(async (req, res) => {
     const { xms, xmx, jar, extraFlags } = req.body ?? {};
     if (typeof jar !== 'string' || !jar.trim()) {
@@ -529,6 +546,7 @@ api.get(
 
 api.post(
   '/api/scheduler/restart',
+  requireRole('admin', 'moderator'),
   asyncRoute(async (req, res) => {
     const result = await restartScheduler.setSchedule(req.body ?? {});
     res.status(result.success ? 200 : 400).json(result);
@@ -537,6 +555,7 @@ api.post(
 
 api.post(
   '/api/scheduler/restart/now',
+  requireRole('admin', 'moderator'),
   asyncRoute(async (_req, res) => {
     try {
       const result = await serverManager.restart();
@@ -555,6 +574,7 @@ api.post(
 
 api.post(
   '/api/server/world-backup',
+  requireRole('admin', 'moderator'),
   asyncRoute(async (_req, res) => {
     if (!fs.existsSync(config.worldPath)) {
       fail(res, 400, 'World directory not found');
