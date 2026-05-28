@@ -492,6 +492,23 @@ body {
   white-space: pre-wrap;
   font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
   padding: 0.25rem 0;
+  cursor: default;
+}
+
+.console-log-tooltip {
+  position: fixed;
+  transform: translate(0, calc(-100% - 4px));
+  padding: 0.2rem 0.5rem;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  color: var(--text-muted);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1100;
+  animation: tooltipFade 0.12s ease-out;
 }
 
 

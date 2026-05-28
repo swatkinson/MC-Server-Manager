@@ -169,19 +169,20 @@ export class ConsoleManager {
       if (sourceLevel === 'ERROR' || sourceLevel === 'WARN' || sourceLevel === 'DEBUG') {
         level = sourceLevel;
       }
-      return { timestamp, level, message };
+      return { timestamp, level, message, source };
     }
 
-    // Forge log format: "[DateTimeWithMs] [Thread/LEVEL] [Source]: Message"
-    const forgeMatch = line.match(/^\[[^\]]+\]\s+\[[^\]]+\/([^\]]+)\]\s+\[[^\]]*\]:\s*(.*)$/);
+    // Forge log format: "[DateTimeWithMs] [Thread/LEVEL] [Mod/]: Message"
+    // Strip the first two brackets; keep the mod bracket as part of the visible message.
+    const forgeMatch = line.match(/^\[([^\]]+)\]\s+\[([^\]]+)\]\s+(\[[^\]]*\]:.*)$/);
     if (forgeMatch) {
-      const [, sourceLevel, message] = forgeMatch;
-      const upper = sourceLevel.toUpperCase();
+      const [, timestamp, threadLevel, message] = forgeMatch;
+      const upper = threadLevel.split('/').pop()?.toUpperCase() ?? '';
       let level: LogLine['level'] = 'INFO';
       if (upper === 'ERROR' || upper === 'WARN' || upper === 'DEBUG') {
         level = upper as LogLine['level'];
       }
-      return { timestamp: '', level, message };
+      return { timestamp, level, message, source: threadLevel };
     }
 
     // Fallback for non-standard lines: keep the whole line as the message.
