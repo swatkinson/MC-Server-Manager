@@ -39,10 +39,10 @@ interface ToastContextValue {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const DEFAULT_DURATIONS: Record<ToastKind, number> = {
-  success: 4000,
-  info: 5000,
-  warning: 8000,
-  error: 10000,
+  success: 2000,
+  info: 2000,
+  warning: 0,
+  error: 0,
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {

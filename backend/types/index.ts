@@ -28,7 +28,7 @@ export interface Player {
 export interface JvmHeap {
   heapUsed: number;
   heapCommitted: number;
-  heapMax: number;
+  heapMax: number | null;
   approximate?: boolean; // true when sourced from process RSS rather than jstat
 }
 
