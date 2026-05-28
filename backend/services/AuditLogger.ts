@@ -1,4 +1,5 @@
 import * as fs from 'fs/promises';
+import * as path from 'path';
 import { randomUUID } from 'crypto';
 
 export interface AuditEntry {
@@ -13,6 +14,7 @@ export interface AuditEntry {
 
 export class AuditLogger {
   private logPath: string;
+  private dirEnsured = false;
 
   constructor(logPath: string) {
     this.logPath = logPath;
@@ -24,6 +26,10 @@ export class AuditLogger {
     details: Record<string, unknown> = {}
   ): Promise<void> {
     try {
+      if (!this.dirEnsured) {
+        await fs.mkdir(path.dirname(this.logPath), { recursive: true });
+        this.dirEnsured = true;
+      }
       const entry: AuditEntry = {
         id: randomUUID(),
         timestamp: Date.now(),

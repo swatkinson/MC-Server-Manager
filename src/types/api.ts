@@ -42,6 +42,7 @@ export interface TpsMetrics {
 export interface SystemMetrics {
   cpu: {
     percentage: number;
+    cores: number[];
   };
   ram: {
     total: number;

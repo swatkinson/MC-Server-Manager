@@ -59,8 +59,8 @@ export function createBackupsRouter(
     requireRole('admin', 'moderator'),
     asyncRoute(async (req, res) => {
       try {
-        void auditLogger.log(req.user ?? null, 'backup.create');
         const result = await backupService.createBackup();
+        if (result.success) void auditLogger.log(req.user ?? null, 'backup.create', { filename: result.filename });
         res.json(result);
       } catch (error) {
         fail(res, 500, 'Failed to create backup', error);

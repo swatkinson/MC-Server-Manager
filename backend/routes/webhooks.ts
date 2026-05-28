@@ -29,7 +29,7 @@ export function createWebhooksRouter(
 
   router.put(
     '/api/webhooks/config',
-    requireRole('admin', 'moderator'),
+    requireRole('admin'),
     asyncRoute(async (req, res) => {
       try {
         await discordNotifier.setConfig(req.body ?? {});

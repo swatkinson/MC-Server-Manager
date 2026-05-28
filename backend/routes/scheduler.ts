@@ -20,7 +20,6 @@ export function createSchedulerRouter(
 
   router.get(
     '/api/scheduler/restart',
-    requireRole('admin', 'moderator'),
     asyncRoute(async (_req, res) => {
       res.json({ schedule: restartScheduler.getSchedule() });
     }),

@@ -58,6 +58,14 @@ export class DiscordNotifier {
   }
 
   async setConfig(partial: Partial<DiscordWebhookConfig>): Promise<void> {
+    if (partial.webhookUrl !== undefined && partial.webhookUrl !== '') {
+      const validPrefix =
+        partial.webhookUrl.startsWith('https://discord.com/api/webhooks/') ||
+        partial.webhookUrl.startsWith('https://discordapp.com/api/webhooks/');
+      if (!validPrefix) {
+        throw new Error('webhookUrl must be a Discord webhook URL (https://discord.com/api/webhooks/...)');
+      }
+    }
     const current = await this.getConfig();
     const updated: DiscordWebhookConfig = {
       ...current,
