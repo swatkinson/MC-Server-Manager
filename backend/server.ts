@@ -75,6 +75,9 @@ const discordNotifier = new DiscordNotifier(config.discordConfigPath);
 const backupService = new BackupService(config.backupConfigPath, config.minecraftDir, config.defaultBackupDir);
 
 metricsCollector.setTpsProvider(() => tpsTracker.getMetrics());
+tpsTracker.setRunningProbe(() => serverManager.isRunning());
+tpsTracker.setServerTypeProvider(() => infoStore.getServerType());
+tpsTracker.start();
 
 // ── App middleware ───────────────────────────────────────────────────────────
 

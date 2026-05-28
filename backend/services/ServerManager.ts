@@ -262,7 +262,9 @@ export class ServerManager {
     let fd: fs.FileHandle | undefined;
     try {
       fd = await fs.open(config.logPath, 'r');
-      const buf = Buffer.alloc(64 * 1024);
+      // Forge startup logs can be several hundred KB before the server thread
+      // begins (mod discovery, class transformation, etc.), so 1 MB is needed.
+      const buf = Buffer.alloc(1024 * 1024);
       const { bytesRead } = await fd.read(buf, 0, buf.length, 0);
       const text = buf.subarray(0, bytesRead).toString('utf-8');
       const match = text.match(/Starting minecraft server version (\S+)/i);
