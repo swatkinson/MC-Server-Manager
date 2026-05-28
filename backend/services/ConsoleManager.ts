@@ -197,14 +197,17 @@ export class ConsoleManager {
   private checkForPlayerEvents(logLine: LogLine): void {
     if (!this.playerManager || !this.onPlayersUpdate) return;
 
-    const joinMatch = logLine.message.match(/^(.+?)\s+joined the game$/);
+    // Forge messages include a mod bracket prefix: "[net.minecraft.server.MinecraftServer/]: "
+    const msg = logLine.message.replace(/^\[[^\]]*\]:\s*/, '');
+
+    const joinMatch = msg.match(/^(.+?)\s+joined the game$/);
     if (joinMatch) {
       this.playerManager.trackPlayerJoin(joinMatch[1]);
       this.onPlayersUpdate(this.playerManager.getOnlinePlayers());
       return;
     }
 
-    const leaveMatch = logLine.message.match(/^(.+?)\s+left the game$/);
+    const leaveMatch = msg.match(/^(.+?)\s+left the game$/);
     if (leaveMatch) {
       this.playerManager.trackPlayerLeave(leaveMatch[1]);
       this.onPlayersUpdate(this.playerManager.getOnlinePlayers());
