@@ -16,7 +16,7 @@ const EMPTY_RAM: SystemMetrics['ram'] = {
 };
 
 const EMPTY_METRICS: SystemMetrics = {
-  cpu: { percentage: 0 },
+  cpu: { percentage: 0, cores: [] },
   ram: EMPTY_RAM,
   storage: { total: 0, used: 0, free: 0, percentage: 0 },
   tps: null,
@@ -25,6 +25,7 @@ const EMPTY_METRICS: SystemMetrics = {
 const CPU_SAMPLE_INTERVAL_MS = 200;
 
 type CpuTimes = { idle: number; total: number };
+type CpuSnapshot = { aggregate: CpuTimes; cores: CpuTimes[] };
 type TpsProvider = () => TpsMetrics | null;
 
 export class MetricsCollector {
@@ -46,29 +47,48 @@ export class MetricsCollector {
 
   private async getCpuMetrics(): Promise<SystemMetrics['cpu']> {
     try {
-      const before = await this.readCpuTimes();
+      const before = await this.readCpuSnapshot();
       await new Promise((resolve) => setTimeout(resolve, CPU_SAMPLE_INTERVAL_MS));
-      const after = await this.readCpuTimes();
+      const after = await this.readCpuSnapshot();
 
-      const totalDelta = after.total - before.total;
-      const idleDelta = after.idle - before.idle;
-      const percentage = totalDelta > 0 ? (1 - idleDelta / totalDelta) * 100 : 0;
+      const computePercentage = (b: CpuTimes, a: CpuTimes): number => {
+        const totalDelta = a.total - b.total;
+        const idleDelta = a.idle - b.idle;
+        return totalDelta > 0 ? clamp((1 - idleDelta / totalDelta) * 100) : 0;
+      };
 
-      return { percentage: clamp(percentage) };
+      const percentage = computePercentage(before.aggregate, after.aggregate);
+      const cores = before.cores.map((b, i) => computePercentage(b, after.cores[i] ?? b));
+
+      return { percentage, cores };
     } catch (error) {
       console.error('Error getting CPU metrics:', error);
       return EMPTY_METRICS.cpu;
     }
   }
 
-  private async readCpuTimes(): Promise<CpuTimes> {
+  private async readCpuSnapshot(): Promise<CpuSnapshot> {
     const content = await fs.readFile('/proc/stat', 'utf-8');
-    const line = content.split('\n').find((l) => l.startsWith('cpu ')) ?? '';
+    const lines = content.split('\n');
+
     // cpu  user nice system idle iowait irq softirq steal guest guest_nice
-    const fields = line.trim().split(/\s+/).slice(1).map((n) => parseInt(n, 10) || 0);
-    const idle = (fields[3] ?? 0) + (fields[4] ?? 0); // idle + iowait
-    const total = fields.reduce((sum, v) => sum + v, 0);
-    return { idle, total };
+    // Steal (field 7) is excluded from total — it's time the hypervisor denied us,
+    // not actual work the VM did, so including it inflates the usage reading.
+    const parseLine = (line: string): CpuTimes => {
+      const fields = line.trim().split(/\s+/).slice(1).map((n) => parseInt(n, 10) || 0);
+      const idle = (fields[3] ?? 0) + (fields[4] ?? 0);
+      const steal = fields[7] ?? 0;
+      const total = fields.reduce((sum, v) => sum + v, 0) - steal;
+      return { idle, total };
+    };
+
+    const aggregateLine = lines.find((l) => l.startsWith('cpu ')) ?? '';
+    const coreLines = lines.filter((l) => /^cpu\d/.test(l));
+
+    return {
+      aggregate: parseLine(aggregateLine),
+      cores: coreLines.map(parseLine),
+    };
   }
 
   private async getRamMetrics(): Promise<SystemMetrics['ram']> {

@@ -86,9 +86,13 @@ export class BackupService {
     const merged: BackupConfig = {
       backupDir: partial.backupDir ?? current.backupDir,
       schedule: partial.schedule
-        ? { ...current.schedule, ...partial.schedule }
+        ? {
+            enabled: partial.schedule.enabled ?? current.schedule.enabled,
+            hour: Math.min(23, Math.max(0, Math.round(partial.schedule.hour ?? current.schedule.hour))),
+            minute: Math.min(59, Math.max(0, Math.round(partial.schedule.minute ?? current.schedule.minute))),
+          }
         : current.schedule,
-      keepCount: partial.keepCount ?? current.keepCount,
+      keepCount: Math.max(1, Math.round(partial.keepCount ?? current.keepCount)),
     };
 
     this.config = merged;
@@ -114,7 +118,16 @@ export class BackupService {
       const parentOfMinecraftDir = path.dirname(this.minecraftDir);
       const minecraftDirName = path.basename(this.minecraftDir);
 
-      await execFileAsync('tar', ['-czf', outputPath, '-C', parentOfMinecraftDir, minecraftDirName]);
+      // Exclude the backups dir from the archive when it lives inside minecraftDir,
+      // otherwise each backup would embed all previous backups.
+      const tarArgs = ['-czf', outputPath];
+      const relBackupsDir = path.relative(this.minecraftDir, backupsDir);
+      if (!relBackupsDir.startsWith('..') && !path.isAbsolute(relBackupsDir)) {
+        tarArgs.push('--exclude', path.join(minecraftDirName, relBackupsDir));
+      }
+      tarArgs.push('-C', parentOfMinecraftDir, minecraftDirName);
+
+      await execFileAsync('tar', tarArgs);
 
       const stat = await fs.stat(outputPath);
       const sizeBytes = stat.size;

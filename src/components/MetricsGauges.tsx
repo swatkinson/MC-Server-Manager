@@ -105,9 +105,26 @@ export function MetricsGauges({ metrics, loading, error }: MetricsGaugesProps) {
             <div className="metrics-gauges__stat-value" style={{ color: cpuColor }}>
               {formatPercentage(displayMetrics.cpu.percentage)}
             </div>
-            <div className="metrics-gauges__stat-label">Total CPU</div>
+            <div className="metrics-gauges__stat-label">Avg across cores</div>
           </div>
         </div>
+
+        {displayMetrics.cpu.cores.length > 0 && (
+          <div className="metrics-gauges__breakdown">
+            {displayMetrics.cpu.cores.map((pct, i) => {
+              const coreColor = getCssColorForZone(getColorByPercentage(pct));
+              return (
+                <div key={i} className="metrics-gauges__breakdown-item">
+                  <span className="metrics-gauges__breakdown-color" style={{ background: coreColor }} />
+                  <span className="metrics-gauges__breakdown-label">Core {i}</span>
+                  <span className="metrics-gauges__breakdown-value" style={{ color: coreColor }}>
+                    {formatPercentage(pct)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="metrics-gauges__card">

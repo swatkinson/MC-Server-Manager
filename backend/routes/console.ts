@@ -20,7 +20,7 @@ export function createConsoleRouter(
     asyncRoute(async (req, res) => {
       try {
         const requested = parseInt(req.query.limit as string, 10);
-        const limit = Number.isFinite(requested) ? requested : 50;
+        const limit = Number.isFinite(requested) ? Math.min(Math.max(1, requested), 1000) : 50;
         const logs = await consoleManager.getLogs(limit);
         res.json({ logs });
       } catch (error) {

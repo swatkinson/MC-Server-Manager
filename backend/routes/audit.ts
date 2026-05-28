@@ -17,7 +17,7 @@ export function createAuditRouter(
     requireRole('admin'),
     asyncRoute(async (req, res) => {
       const limit = Math.min(parseInt(req.query.limit as string, 10) || 25, 200);
-      const offset = parseInt(req.query.offset as string, 10) || 0;
+      const offset = Math.max(0, parseInt(req.query.offset as string, 10) || 0);
       try {
         const result = await auditLogger.getEntries(limit, offset);
         res.json(result);
