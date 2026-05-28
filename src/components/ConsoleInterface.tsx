@@ -7,11 +7,11 @@ interface ConsoleInterfaceProps {
   error?: string | null;
 }
 
-const LOG_LEVEL_COLORS: Record<LogLine['level'], string> = {
-  ERROR: '#ef4444',
-  WARN: '#f59e0b',
-  INFO: '#e2e8f0',
-  DEBUG: '#6b7280',
+const LOG_LEVEL_CLASSES: Record<LogLine['level'], string> = {
+  ERROR: 'log-error',
+  WARN: 'log-warn',
+  INFO: 'log-info',
+  DEBUG: 'log-muted',
 };
 
 export function ConsoleInterface({ logs, loading, error }: ConsoleInterfaceProps) {
@@ -26,22 +26,13 @@ export function ConsoleInterface({ logs, loading, error }: ConsoleInterfaceProps
   }, [logs]);
 
   const renderLogLine = (log: LogLine, index: number) => {
-    const color = LOG_LEVEL_COLORS[log.level];
+    const levelClass = LOG_LEVEL_CLASSES[log.level];
 
     return (
       <div
         key={`${log.timestamp}-${index}`}
-        className="console-interface__line"
-        style={{
-          color,
-          fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-        }}
+        className={`console-interface__line ${levelClass}`}
       >
-        {log.timestamp && (
-          <span className="console-interface__timestamp" style={{ color: '#8892a4' }}>
-            {`[${log.timestamp}]: `}
-          </span>
-        )}
         <span className="console-interface__message">
           {log.message}
         </span>

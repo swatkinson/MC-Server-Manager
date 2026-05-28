@@ -172,6 +172,18 @@ export class ConsoleManager {
       return { timestamp, level, message };
     }
 
+    // Forge log format: "[DateTimeWithMs] [Thread/LEVEL] [Source]: Message"
+    const forgeMatch = line.match(/^\[[^\]]+\]\s+\[[^\]]+\/([^\]]+)\]\s+\[[^\]]*\]:\s*(.*)$/);
+    if (forgeMatch) {
+      const [, sourceLevel, message] = forgeMatch;
+      const upper = sourceLevel.toUpperCase();
+      let level: LogLine['level'] = 'INFO';
+      if (upper === 'ERROR' || upper === 'WARN' || upper === 'DEBUG') {
+        level = upper as LogLine['level'];
+      }
+      return { timestamp: '', level, message };
+    }
+
     // Fallback for non-standard lines: keep the whole line as the message.
     let level: LogLine['level'] = 'INFO';
     if (line.includes('ERROR')) level = 'ERROR';

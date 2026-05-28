@@ -494,10 +494,6 @@ body {
   padding: 0.25rem 0;
 }
 
-.console-interface__timestamp {
-  margin-right: 0.5rem;
-  opacity: 0.7;
-}
 
 .console-interface__level {
   font-weight: 600;
@@ -2026,3 +2022,22 @@ body {
 .user-menu__item--danger {
   color: var(--red);
 }
+
+/* Console log level colors */
+.log-error { color: var(--red); }
+.log-warn  { color: var(--yellow); }
+.log-info  { color: var(--text); }
+.log-muted { color: var(--text-muted); }
+
+/* Server status colors */
+.status-online   { color: var(--green); }
+.status-offline  { color: var(--red); }
+.status-starting { color: var(--yellow); }
+.status-stopping { color: var(--yellow); }
+
+/* Status dot background variants */
+.server-header__status-dot.status-online   { background-color: var(--green); }
+.server-header__status-dot.status-offline  { background-color: var(--red); }
+.server-header__status-dot.status-starting { background-color: var(--yellow); }
+.server-header__status-dot.status-stopping { background-color: var(--yellow); }
+.server-header__status-dot.status-dot--muted { background-color: var(--gray); }
