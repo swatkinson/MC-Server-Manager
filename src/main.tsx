@@ -12,13 +12,14 @@ import {
 import { Dashboard } from './pages/Dashboard'
 import { LoginPage } from './pages/LoginPage'
 import { AccountsPage } from './pages/AccountsPage'
+import { AuditLogPage } from './pages/AuditLogPage'
 import { ToastProvider } from './context/ToastContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ToastContainer } from './components/ToastContainer'
 import './styles/app.css'
 
 // Protected routes — redirect to /login when not authenticated
-const PROTECTED = new Set(['/', '/accounts'])
+const PROTECTED = new Set(['/', '/accounts', '/audit'])
 
 function RootLayout() {
   const { user, loading, setupRequired } = useAuth()
@@ -72,7 +73,13 @@ const accountsRoute = createRoute({
   component: AccountsPage,
 })
 
-const routeTree = rootRoute.addChildren([loginRoute, indexRoute, accountsRoute])
+const auditRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/audit',
+  component: AuditLogPage,
+})
+
+const routeTree = rootRoute.addChildren([loginRoute, indexRoute, accountsRoute, auditRoute])
 
 const router = createRouter({ routeTree })
 

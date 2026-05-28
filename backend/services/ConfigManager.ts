@@ -1,4 +1,5 @@
 import * as fs from 'fs/promises';
+import * as path from 'path';
 import { ServerConfig, WhitelistEntry } from '../types/index.js';
 import { config } from '../config.js';
 
@@ -39,6 +40,22 @@ export class ConfigManager {
       console.error('Error reading server properties:', error);
       return defaults;
     }
+  }
+
+  async getWorldPath(): Promise<string> {
+    if (process.env.WORLD_PATH) return process.env.WORLD_PATH;
+
+    try {
+      const properties = await this.getServerProperties();
+      const levelName = properties['level-name'];
+      if (typeof levelName === 'string' && levelName.trim()) {
+        return path.join(config.minecraftDir, levelName.trim());
+      }
+    } catch {
+      // fall through to default
+    }
+
+    return path.join(config.minecraftDir, 'world');
   }
 
   async setServerProperties(properties: ServerConfig): Promise<Result> {

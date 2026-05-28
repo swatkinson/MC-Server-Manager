@@ -27,6 +27,8 @@ export class RestartScheduler {
   private fiveMinTimer: NodeJS.Timeout | null = null;
   private oneMinTimer: NodeJS.Timeout | null = null;
   private restartTimer: NodeJS.Timeout | null = null;
+  onBeforeRestart: (() => void) | null = null;
+  onAfterRestart: (() => void) | null = null;
 
   constructor(
     private readonly serverManager: ServerManager,
@@ -124,9 +126,11 @@ export class RestartScheduler {
   }
 
   private async executeRestart(): Promise<void> {
+    this.onBeforeRestart?.();
     try {
       if (await this.serverManager.isRunning()) {
         await this.serverManager.restart();
+        this.onAfterRestart?.();
       }
     } catch (error) {
       console.error('RestartScheduler: restart failed:', error);

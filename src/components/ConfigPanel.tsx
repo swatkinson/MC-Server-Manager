@@ -4,6 +4,8 @@ import { WhitelistManager } from './WhitelistManager';
 import { JVMParametersEditor } from './JVMParametersEditor';
 import { WorldBackupDownloader } from './WorldBackupDownloader';
 import { RestartSchedulerEditor } from './RestartSchedulerEditor';
+import { BackupManager } from './BackupManager';
+import { WebhooksPanel } from './WebhooksPanel';
 import { ServerStatus } from '../types/api';
 import '../styles/config-panel.css';
 
@@ -17,8 +19,10 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ className = '', server
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [whitelistOpen, setWhitelistOpen] = useState(false);
   const [jvmOpen, setJvmOpen] = useState(false);
+  const [worldBackupOpen, setWorldBackupOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
   const [schedulerOpen, setSchedulerOpen] = useState(false);
+  const [webhooksOpen, setWebhooksOpen] = useState(false);
 
   return (
     <>
@@ -53,11 +57,20 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ className = '', server
 
           <button
             className="config-button config-button--backup"
+            onClick={() => setWorldBackupOpen(true)}
+            title="Download world folder as a .tar.gz directly to your browser"
+          >
+            <span className="config-button__icon">🌍</span>
+            <span className="config-button__text">World Backup</span>
+          </button>
+
+          <button
+            className="config-button config-button--backup"
             onClick={() => setBackupOpen(true)}
-            title="Download world backup"
+            title="Manage scheduled server backups on HDD"
           >
             <span className="config-button__icon">📦</span>
-            <span className="config-button__text">World Backup</span>
+            <span className="config-button__text">Backups</span>
           </button>
 
           <button
@@ -67,6 +80,15 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ className = '', server
           >
             <span className="config-button__icon">🕐</span>
             <span className="config-button__text">Restart Scheduler</span>
+          </button>
+
+          <button
+            className="config-button config-button--webhooks"
+            onClick={() => setWebhooksOpen(true)}
+            title="Configure Discord webhook notifications"
+          >
+            <span className="config-button__icon">🔔</span>
+            <span className="config-button__text">Discord Webhooks</span>
           </button>
         </div>
       </div>
@@ -87,12 +109,20 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({ className = '', server
         serverRunning={serverRunning}
       />
       <WorldBackupDownloader
+        isOpen={worldBackupOpen}
+        onClose={() => setWorldBackupOpen(false)}
+      />
+      <BackupManager
         isOpen={backupOpen}
         onClose={() => setBackupOpen(false)}
       />
       <RestartSchedulerEditor
         isOpen={schedulerOpen}
         onClose={() => setSchedulerOpen(false)}
+      />
+      <WebhooksPanel
+        isOpen={webhooksOpen}
+        onClose={() => setWebhooksOpen(false)}
       />
     </>
   );

@@ -47,6 +47,17 @@ export function UserMenu() {
               Manage Accounts
             </button>
           )}
+          {user.role === 'admin' && (
+            <button
+              className="user-menu__item"
+              onClick={() => {
+                setOpen(false);
+                void navigate({ to: '/audit' });
+              }}
+            >
+              Audit Log
+            </button>
+          )}
           <button
             className="user-menu__item user-menu__item--danger"
             onClick={() => void handleLogout()}
