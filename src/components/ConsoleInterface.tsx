@@ -1,10 +1,17 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { LogLine } from '../types/api';
 
 interface ConsoleInterfaceProps {
   logs: LogLine[];
   loading: boolean;
   error?: string | null;
+}
+
+interface ConsoleTooltip {
+  text: string;
+  x: number;
+  y: number;
 }
 
 const LOG_LEVEL_CLASSES: Record<LogLine['level'], string> = {
@@ -17,8 +24,8 @@ const LOG_LEVEL_CLASSES: Record<LogLine['level'], string> = {
 export function ConsoleInterface({ logs, loading, error }: ConsoleInterfaceProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const [activeTooltip, setActiveTooltip] = useState<ConsoleTooltip | null>(null);
 
-  // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
     if (endRef.current) {
       endRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -27,11 +34,20 @@ export function ConsoleInterface({ logs, loading, error }: ConsoleInterfaceProps
 
   const renderLogLine = (log: LogLine, index: number) => {
     const levelClass = LOG_LEVEL_CLASSES[log.level];
+    const tooltipText = [
+      log.timestamp && `[${log.timestamp}]`,
+      log.source && `[${log.source}]`,
+    ].filter(Boolean).join(' ');
 
     return (
       <div
         key={`${log.timestamp}-${index}`}
         className={`console-interface__line ${levelClass}`}
+        onMouseEnter={tooltipText ? (e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          setActiveTooltip({ text: tooltipText, x: rect.left, y: rect.top });
+        } : undefined}
+        onMouseLeave={tooltipText ? () => setActiveTooltip(null) : undefined}
       >
         <span className="console-interface__message">
           {log.message}
@@ -64,6 +80,16 @@ export function ConsoleInterface({ logs, loading, error }: ConsoleInterfaceProps
         {logs.map((log, index) => renderLogLine(log, index))}
         <div ref={endRef} />
       </div>
+
+      {activeTooltip && createPortal(
+        <div
+          className="console-log-tooltip"
+          style={{ top: activeTooltip.y, left: activeTooltip.x }}
+        >
+          {activeTooltip.text}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

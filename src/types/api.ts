@@ -14,6 +14,7 @@ export interface LogLine {
   timestamp: string;
   level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
   message: string;
+  source?: string;
 }
 
 export interface Player {
@@ -147,4 +148,50 @@ export interface SetupCheckResponse {
 
 export interface UsersListResponse {
   users: PublicUser[];
+}
+
+export interface AuditEntry {
+  id: string;
+  timestamp: number;
+  userId: string | null;
+  username: string | null;
+  role: 'admin' | 'moderator' | 'user' | null;
+  action: string;
+  details: Record<string, unknown>;
+}
+
+export interface DiscordWebhookConfig {
+  webhookUrl: string;
+  enabled: boolean;
+  events: {
+    serverStart: boolean;
+    serverStop: boolean;
+    serverCrash: boolean;
+    scheduledRestart: boolean;
+    backupSuccess: boolean;
+    backupFailed: boolean;
+  };
+}
+
+export interface BackupConfig {
+  backupDir: string;
+  schedule: {
+    enabled: boolean;
+    hour: number;
+    minute: number;
+  };
+  keepCount: number;
+}
+
+export interface BackupInfo {
+  filename: string;
+  sizeBytes: number;
+  createdAt: number;
+}
+
+export interface BackupResult {
+  success: boolean;
+  filename?: string;
+  sizeBytes?: number;
+  error?: string;
 }
