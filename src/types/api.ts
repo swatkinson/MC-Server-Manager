@@ -29,6 +29,7 @@ export interface JvmHeap {
   heapUsed: number;
   heapCommitted: number;
   heapMax: number;
+  approximate?: boolean; // true when sourced from process RSS rather than jstat
 }
 
 export interface TpsMetrics {

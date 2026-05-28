@@ -145,10 +145,12 @@ export function MetricsGauges({ metrics, loading, error }: MetricsGaugesProps) {
         <div className="metrics-gauges__breakdown">
           <div className="metrics-gauges__breakdown-item">
             <span className="metrics-gauges__breakdown-color" style={{ background: '#22c55e' }} />
-            <span className="metrics-gauges__breakdown-label">JVM heap</span>
+            <span className="metrics-gauges__breakdown-label">
+              {displayMetrics.ram.jvm?.approximate ? 'JVM process' : 'JVM heap'}
+            </span>
             <span className="metrics-gauges__breakdown-value" style={{ color: displayMetrics.ram.jvm ? undefined : ramColor }}>
               {displayMetrics.ram.jvm
-                ? `${formatBytes(displayMetrics.ram.jvm.heapUsed)} / ${formatBytes(displayMetrics.ram.jvm.heapMax)}`
+                ? `${displayMetrics.ram.jvm.approximate ? '~' : ''}${formatBytes(displayMetrics.ram.jvm.heapUsed)} / ${formatBytes(displayMetrics.ram.jvm.heapMax)}`
                 : 'unavailable'}
             </span>
           </div>
