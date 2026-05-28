@@ -125,15 +125,24 @@ export class MetricsCollector {
         readHeapStats(pid),
         readMaxHeapFromCmdline(pid),
       ]);
-      if (!heapStats || !heapMax) return null;
+      if (heapStats && heapMax) {
+        return {
+          heapUsed: heapStats.used,
+          heapCommitted: heapStats.committed,
+          heapMax,
+        };
+      }
+      // jstat unavailable (not installed, wrong user, transitional JVM state).
+      // Fall back to process RSS — world-readable from /proc regardless of owner.
+      const rssBytes = await readProcessRss(pid);
+      if (rssBytes === null) return null;
       return {
-        heapUsed: heapStats.used,
-        heapCommitted: heapStats.committed,
-        heapMax,
+        heapUsed: rssBytes,
+        heapCommitted: rssBytes,
+        heapMax: heapMax ?? rssBytes,
+        approximate: true,
       };
     } catch {
-      // jstat may not be installed, or the JVM may be in a transitional state.
-      // Returning null lets the gauge fall back to system-only display.
       return null;
     }
   }
@@ -190,6 +199,18 @@ async function readHeapStats(pid: number): Promise<{ used: number; committed: nu
     const committedKb = at('S0C') + at('S1C') + at('EC') + at('OC');
     if (committedKb <= 0) return null;
     return { used: usedKb * 1024, committed: committedKb * 1024 };
+  } catch {
+    return null;
+  }
+}
+
+// /proc/<pid>/status is world-readable (no ownership restriction) — VmRSS is
+// the physical RAM the process currently occupies, used as a jstat fallback.
+async function readProcessRss(pid: number): Promise<number | null> {
+  try {
+    const content = await fs.readFile(`/proc/${pid}/status`, 'utf-8');
+    const match = content.match(/^VmRSS:\s+(\d+)\s+kB/m);
+    return match ? parseInt(match[1], 10) * 1024 : null;
   } catch {
     return null;
   }
