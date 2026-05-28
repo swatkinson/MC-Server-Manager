@@ -1,11 +1,11 @@
 import React from 'react';
 import { ServerStatus, TpsMetrics } from '../types/api';
 
-const STATUS_COLORS: Record<ServerStatus['status'], string> = {
-  online: '#22c55e',
-  offline: '#ef4444',
-  starting: '#f59e0b',
-  stopping: '#f59e0b',
+const STATUS_CLASSES: Record<ServerStatus['status'], string> = {
+  online: 'status-online',
+  offline: 'status-offline',
+  starting: 'status-starting',
+  stopping: 'status-stopping',
 };
 
 interface ServerHeaderProps {
@@ -34,7 +34,7 @@ export const ServerHeader: React.FC<ServerHeaderProps> = ({ status, tps, loading
         </div>
         <div className="server-header__info-grid">
           <div className="server-header__status-indicator server-header__status-indicator--end">
-            <span className="server-header__status-dot" style={{ backgroundColor: '#6b7280' }} />
+            <span className="server-header__status-dot status-dot--muted" />
             <span className="server-header__status-text">—</span>
           </div>
         </div>
@@ -42,7 +42,7 @@ export const ServerHeader: React.FC<ServerHeaderProps> = ({ status, tps, loading
     );
   }
 
-  const statusColor = STATUS_COLORS[status.status];
+  const statusClass = STATUS_CLASSES[status.status];
   const statusLabel = status.status.charAt(0).toUpperCase() + status.status.slice(1);
 
   const formatUptime = (seconds: number): string => {
@@ -94,11 +94,8 @@ export const ServerHeader: React.FC<ServerHeaderProps> = ({ status, tps, loading
           </span>
         </div>
         <div className="server-header__status-indicator server-header__status-indicator--end">
-          <span
-            className="server-header__status-dot"
-            style={{ backgroundColor: statusColor }}
-          />
-          <span className="server-header__status-text">{statusLabel}</span>
+          <span className={`server-header__status-dot ${statusClass}`} />
+          <span className={`server-header__status-text ${statusClass}`}>{statusLabel}</span>
         </div>
       </div>
     </div>

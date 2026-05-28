@@ -66,7 +66,7 @@ async function checkStartScript(): Promise<PreflightCheck> {
       id: 'start-script',
       label: 'Start script',
       severity: 'error',
-      message: `start.sh not found at ${config.startScript}. Create one that launches the server inside \`screen -S ${config.screenSession}\`.`,
+      message: `start.sh not found at ${config.startScript}. Create it in your Minecraft directory:\n\n  #!/bin/bash\n  cd ${config.minecraftDir}\n  screen -dmS ${config.screenSession} bash -c 'java -Xms2G -Xmx4G -jar server.jar nogui'\n\nThen run: chmod +x ${config.startScript}\n\nAdjust memory flags (-Xms, -Xmx) and jar filename to match your server.`,
     };
   }
   if (!(await isExecutable(config.startScript))) {

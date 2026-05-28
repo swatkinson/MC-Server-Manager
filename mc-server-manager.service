@@ -1,12 +1,15 @@
+# Setup: Replace <your-username> with your Linux username before installing.
+# Install: sudo cp mc-server-manager.service /etc/systemd/system/
+#          sudo systemctl daemon-reload && sudo systemctl enable --now mc-server-manager
 [Unit]
 Description=MC Server Manager Dashboard
 After=network.target
 
 [Service]
 Type=simple
-User=swatkinson
-WorkingDirectory=/home/swatkinson/mc-server-manager
-ExecStart=/usr/bin/node /home/swatkinson/mc-server-manager/dist/backend/server.js
+User=<your-username>
+WorkingDirectory=/home/<your-username>/mc-server-manager
+ExecStart=/usr/bin/node /home/<your-username>/mc-server-manager/dist/backend/server.js
 Restart=always
 RestartSec=5s
 StandardOutput=journal
@@ -17,7 +20,8 @@ CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
 Environment="NODE_ENV=production"
 Environment="PORT=80"
-Environment="MINECRAFT_DIR=/home/swatkinson/MinecraftServer"
+Environment="MINECRAFT_DIR=/home/<your-username>/MinecraftServer"
+Environment="JWT_SECRET=<your-jwt-secret>"
 
 [Install]
 WantedBy=multi-user.target

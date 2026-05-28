@@ -26,7 +26,23 @@ Alternatively, use `www-data` user if it exists on your system:
 sudo chown -R www-data:www-data /opt/mc-server-manager
 ```
 
-### 2. Install systemd service
+### 2. Create start.sh
+
+### start.sh template
+
+Create `$MINECRAFT_DIR/start.sh` with content like:
+
+```bash
+#!/bin/bash
+cd /path/to/your/MinecraftServer
+screen -dmS minecraft bash -c 'java -Xms2G -Xmx4G -jar server.jar nogui'
+```
+
+Make it executable: `chmod +x start.sh`
+
+Adjust the memory flags (`-Xms`, `-Xmx`) and jar filename to match your setup.
+
+### 3. Install systemd service
 
 Copy the service file to systemd:
 ```bash
@@ -34,7 +50,7 @@ sudo cp mc-server-manager.service /etc/systemd/system/
 sudo systemctl daemon-reload
 ```
 
-### 3. Configure environment
+### 4. Configure environment
 
 Edit `/etc/systemd/system/mc-server-manager.service` and update:
 
@@ -49,14 +65,14 @@ Common paths:
 - `/home/ubuntu/MinecraftServer`
 - `/opt/minecraft`
 
-### 4. Enable and start the service
+### 5. Enable and start the service
 
 ```bash
 sudo systemctl enable mc-server-manager
 sudo systemctl start mc-server-manager
 ```
 
-### 5. Verify it's running
+### 6. Verify it's running
 
 ```bash
 # Check status
@@ -69,7 +85,7 @@ sudo journalctl -u mc-server-manager -n 50 -f
 curl http://localhost/api/health
 ```
 
-### 6. Configure GitHub Actions (if using auto-deployment)
+### 7. Configure GitHub Actions (if using auto-deployment)
 
 The GitHub Actions workflow needs permission to restart the service without a password prompt.
 

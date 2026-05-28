@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { extractErrorMessage } from '../utils/apiError';
 
 export interface UseApiOptions {
   interval?: number;
@@ -62,15 +63,6 @@ async function parseJsonOrNull(response: Response): Promise<unknown> {
   }
 }
 
-function extractMessage(body: unknown, fallback: string): string {
-  if (body && typeof body === 'object') {
-    const obj = body as Record<string, unknown>;
-    if (typeof obj.message === 'string' && obj.message.trim()) return obj.message;
-    if (typeof obj.error === 'string' && obj.error.trim()) return obj.error;
-  }
-  return fallback;
-}
-
 export async function apiPost<T>(url: string, body: unknown): Promise<T> {
   const response = await globalThis.fetch(url, {
     method: 'POST',
@@ -87,7 +79,7 @@ export async function apiPost<T>(url: string, body: unknown): Promise<T> {
   const parsed = await parseJsonOrNull(response);
 
   if (!response.ok) {
-    throw new Error(extractMessage(parsed, `Request failed: ${response.statusText}`));
+    throw new Error(extractErrorMessage(parsed, `Request failed: ${response.statusText}`));
   }
 
   return parsed as T;
@@ -107,7 +99,7 @@ export async function apiDelete<T>(url: string): Promise<T> {
   const parsed = await parseJsonOrNull(response);
 
   if (!response.ok) {
-    throw new Error(extractMessage(parsed, `Request failed: ${response.statusText}`));
+    throw new Error(extractErrorMessage(parsed, `Request failed: ${response.statusText}`));
   }
 
   return parsed as T;

@@ -7,6 +7,43 @@ VM as the Minecraft server.
 
 ---
 
+## Quick Start — Setup on a New Server
+
+Drop this dashboard beside any vanilla or modded Minecraft Java server on Ubuntu.
+
+1. **Clone the repo** onto your server:
+   ```bash
+   git clone https://github.com/swatkinson/mc-server-manager.git
+   cd mc-server-manager
+   ```
+
+2. **Install dependencies and build:**
+   ```bash
+   npm install && npm run build:prod
+   ```
+
+3. **Configure the app** — copy the example env file and set the required values:
+   ```bash
+   cp .env.example .env
+   # Edit .env: set JWT_SECRET and MINECRAFT_DIR at minimum
+   ```
+   Generate a secret: `openssl rand -base64 48`
+
+4. **Create `$MINECRAFT_DIR/start.sh`** that launches your server inside a `screen` session.
+   See `DEPLOYMENT_SETUP.md` for a ready-to-use template.
+
+5. **Install and enable the systemd service:**
+   ```bash
+   sudo cp mc-server-manager.service /etc/systemd/system/
+   # Edit the unit file: replace <your-username> with your system user
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now mc-server-manager
+   ```
+
+6. **Open `http://your-server-ip`** in a browser — the first run creates an admin account.
+
+---
+
 ## Project Goals
 
 - Provide a clean, modern web UI to monitor and control a Minecraft server
@@ -94,15 +131,43 @@ browser ──HTTP/WS──▶ Node process (port 80)
                            └─ reads/writes server.properties, whitelist.json
 ```
 
-Configurable via environment variables:
+---
 
-| Variable | Default | Purpose |
+## Configuration
+
+All configuration is driven by environment variables (`.env` file or systemd `EnvironmentFile`).
+
+| Variable | Default | Description |
 |---|---|---|
+| `JWT_SECRET` | — | **Required.** Generate: `openssl rand -base64 48` |
+| `MINECRAFT_DIR` | `~/MinecraftServer` | Path to your Minecraft server directory |
+| `STORAGE_PATH` | `MINECRAFT_DIR` | Where app config/users are stored |
+| `WORLD_PATH` | auto-detect from `level-name` | Override world directory path |
+| `LOG_PATH` | `MINECRAFT_DIR/logs/latest.log` | Override log file path |
+| `START_SCRIPT` | `MINECRAFT_DIR/start.sh` | Override start script path |
+| `SERVER_PROPERTIES_PATH` | `MINECRAFT_DIR/server.properties` | Override server.properties path |
+| `MC_SCREEN_SESSION` | `minecraft` | Name of the screen session |
 | `PORT` | `3001` (dev) / `80` (prod) | HTTP port |
-| `NODE_ENV` | `development` | `production` enables static file serving |
-| `MINECRAFT_DIR` | `~/MinecraftServer` | Root directory of the MC server |
-| `STORAGE_PATH` | `$MINECRAFT_DIR` | Path queried by `df` for the storage gauge |
-| `MC_SCREEN_SESSION` | `minecraft` | Name of the `screen` session running the MC server |
+| `BACKUP_DIR` | `MINECRAFT_DIR/mc-server-manager-backups` | Where backups are stored |
+
+`NODE_ENV=production` enables static file serving from `dist/` (set automatically by the systemd unit).
+
+### Optional Tools
+
+Features degrade gracefully if these are absent:
+
+- `jstat` — JVM heap metrics (part of JDK, not JRE)
+- `spark` plugin — enhanced TPS metrics on Forge/Paper servers
+- `rsync` — required for backup restore operations
+
+### Server Type Compatibility
+
+| Feature | Vanilla | Paper | Forge | Fabric |
+|---|---|---|---|---|
+| Console, start/stop, metrics | ✓ | ✓ | ✓ | ✓ |
+| TPS (`tps` command) | — | ✓ | ✓ | ✓ |
+| TPS (Spark plugin) | — | ✓ | ✓ | ✓ |
+| JVM heap metrics (`jstat`) | ✓ | ✓ | ✓ | ✓ |
 
 ---
 

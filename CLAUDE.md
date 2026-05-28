@@ -43,6 +43,14 @@ All env-driven configuration lives in `backend/config.ts` (`MINECRAFT_DIR`, `MC_
 | `ConfigManager` | Read/write `server.properties` and `whitelist.json` |
 | `PreflightChecker` | Validates paths and required binaries on startup (`java`, `screen`, `pgrep`, `pkill`, `jstat`) |
 | `PortForwardChecker` | Checks external reachability 30 s after server start via `api.ipify.org` + `mcsrvstat.us` |
+| `AuditLogger` | Appends structured JSON entries to an audit log file; supports paginated retrieval |
+| `DiscordNotifier` | Sends Discord webhook embeds for server start/stop/crash, scheduled restarts, and backup events; config persisted to JSON |
+| `BackupService` | Creates/lists/deletes/restores `tar.gz` world backups; enforces a keep-count retention policy; supports optional scheduled daily backups |
+| `RestartScheduler` | Schedules automatic daily server restarts at a configured hour/minute; sends in-game 5-min and 1-min warnings; persists schedule to JSON |
+| `UserStore` | Persists user accounts (id, username, passwordHash, role) to `users.json`; CRUD operations for admin/moderator/user accounts |
+| `AuthService` | JWT-based authentication (bcrypt password hashing, 8-hour tokens); issues and validates `mc_auth` session cookies |
+| `ServerInfoStore` | Persists server metadata (version, serverType) to `server-info.json` |
+| `StartupScriptManager` | Reads and writes `start.sh`, parsing and reconstructing JVM flags (`-Xms`, `-Xmx`, `-jar`, extra flags) |
 
 `backend/server.ts` instantiates all services, wires routes and Socket.IO events, and starts the HTTP server.
 
@@ -65,7 +73,7 @@ API utilities are in `src/hooks/useApi.ts`: `useApi` for GET with auto-polling, 
 
 ### Socket.IO Events (server → client)
 
-`metrics:updated`, `console:line`, `server:status:changed`, `players:updated`, `config:updated`, `whitelist:updated`, `portforward:result`
+`metrics:updated`, `console:line`, `server:status:changed`, `players:updated`, `config:updated`, `whitelist:updated`, `portforward:result`, `scheduler:updated`
 
 ## Coding Standards
 
