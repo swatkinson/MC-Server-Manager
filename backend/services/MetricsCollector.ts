@@ -139,7 +139,7 @@ export class MetricsCollector {
       return {
         heapUsed: rssBytes,
         heapCommitted: rssBytes,
-        heapMax: heapMax ?? rssBytes,
+        heapMax: heapMax,
         approximate: true,
       };
     } catch {

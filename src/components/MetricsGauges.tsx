@@ -150,7 +150,7 @@ export function MetricsGauges({ metrics, loading, error }: MetricsGaugesProps) {
             </span>
             <span className="metrics-gauges__breakdown-value" style={{ color: displayMetrics.ram.jvm ? undefined : ramColor }}>
               {displayMetrics.ram.jvm
-                ? `${displayMetrics.ram.jvm.approximate ? '~' : ''}${formatBytes(displayMetrics.ram.jvm.heapUsed)} / ${formatBytes(displayMetrics.ram.jvm.heapMax)}`
+                ? `${displayMetrics.ram.jvm.approximate ? '~' : ''}${formatBytes(displayMetrics.ram.jvm.heapUsed)}${displayMetrics.ram.jvm.heapMax !== null ? ` / ${formatBytes(displayMetrics.ram.jvm.heapMax)}` : ''}`
                 : 'unavailable'}
             </span>
           </div>
