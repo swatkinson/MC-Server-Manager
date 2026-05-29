@@ -159,7 +159,7 @@ export class TpsTracker {
     }
     // Forge per-dimension lines printed by `/forge tps`:
     //   "Dim minecraft:overworld: Mean tick time: 1.234 ms. Mean TPS: 20.000"
-    if (/Dim\s+[^:]+:\s*Mean tick time:.*Mean TPS/i.test(message)) {
+    if (/Mean TPS:/i.test(message)) {
       return true;
     }
     return false;
