@@ -385,17 +385,20 @@ function applyScheme(scheme: ColorScheme) {
   }
 }
 
+const DEFAULT_ID = 'A27'
+
 export function initColorScheme() {
   const saved = localStorage.getItem(STORAGE_KEY)
   const scheme = saved ? COLOR_SCHEMES.find(s => s.id === saved) : undefined
-  applyScheme(scheme ?? COLOR_SCHEMES[0])
+  applyScheme(scheme ?? COLOR_SCHEMES.find(s => s.id === DEFAULT_ID) ?? COLOR_SCHEMES[0])
 }
 
 export function useColorScheme() {
   const [index, setIndex] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
     const found = saved ? COLOR_SCHEMES.findIndex(s => s.id === saved) : -1
-    return found >= 0 ? found : 0
+    if (found >= 0) return found
+    return COLOR_SCHEMES.findIndex(s => s.id === DEFAULT_ID)
   })
 
   useEffect(() => {
