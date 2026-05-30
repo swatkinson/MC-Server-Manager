@@ -2058,35 +2058,3 @@ body {
 .server-header__status-dot.status-starting { background-color: var(--yellow); }
 .server-header__status-dot.status-stopping { background-color: var(--yellow); }
 .server-header__status-dot.status-dot--muted { background-color: var(--gray); }
-
-/* Theme switcher */
-.theme-switcher {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.35rem 0.75rem;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  cursor: pointer;
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  white-space: nowrap;
-  transition: border-color 0.15s, color 0.15s;
-}
-
-.theme-switcher:hover {
-  border-color: var(--blue);
-  color: var(--text);
-}
-
-.theme-switcher__id {
-  font-weight: 700;
-  font-family: monospace;
-  color: var(--blue);
-  font-size: 0.75rem;
-}
-
-.theme-switcher__name {
-  font-weight: 500;
-}
