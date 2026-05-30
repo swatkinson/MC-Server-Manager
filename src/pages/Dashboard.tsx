@@ -5,6 +5,7 @@ import { PlayerList } from '../components/PlayerList'
 import { MetricsGauges } from '../components/MetricsGauges'
 import { ConfigPanel } from '../components/ConfigPanel'
 import { UserMenu } from '../components/UserMenu'
+import { ThemeSwitcher } from '../components/ThemeSwitcher'
 import { useMetrics } from '../hooks/useMetrics'
 import { useServerStatus } from '../hooks/useServerStatus'
 import { useStartupChecks } from '../hooks/usePreflight'
@@ -29,6 +30,7 @@ export function Dashboard() {
         publicIp={publicIp}
         actions={
           <>
+            <ThemeSwitcher />
             {user?.role !== 'user' && (
               <ControlButtons
                 status={status}

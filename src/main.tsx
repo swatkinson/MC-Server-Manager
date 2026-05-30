@@ -16,7 +16,10 @@ import { AuditLogPage } from './pages/AuditLogPage'
 import { ToastProvider } from './context/ToastContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ToastContainer } from './components/ToastContainer'
+import { initColorScheme } from './hooks/useColorScheme'
 import './styles/app.css'
+
+initColorScheme()
 
 // Protected routes — redirect to /login when not authenticated
 const PROTECTED = new Set(['/', '/accounts', '/audit'])
