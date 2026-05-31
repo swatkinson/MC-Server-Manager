@@ -8,7 +8,7 @@ export function useStartupScript() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const save = useCallback(
-    async (cfg: Omit<StartupScriptConfig, 'rawCommand'>): Promise<boolean> => {
+    async (cfg: Omit<StartupScriptConfig, 'rawCommand' | 'launchMode'>): Promise<boolean> => {
       setSaving(true);
       setSaveError(null);
       try {
