@@ -9,12 +9,12 @@ interface JVMParametersEditorProps {
   serverRunning?: boolean;
 }
 
-function buildPreview(xms: string, xmx: string, jar: string, extraFlags: string): string {
+function buildPreview(xms: string, xmx: string, jar: string, extraFlags: string, launchMode: 'simple' | 'forge'): string {
   const parts = ['java'];
   if (xms) parts.push(`-Xms${xms}`);
   if (xmx) parts.push(`-Xmx${xmx}`);
   if (extraFlags.trim()) parts.push(extraFlags.trim());
-  if (jar) parts.push('-jar', jar, 'nogui');
+  if (launchMode === 'simple' && jar) parts.push('-jar', jar, 'nogui');
   return parts.join(' ');
 }
 
@@ -42,12 +42,16 @@ export const JVMParametersEditor: React.FC<JVMParametersEditorProps> = ({
 
   if (!isOpen) return null;
 
-  const preview = buildPreview(xms, xmx, jar, extraFlags);
+  const launchMode = config?.launchMode ?? 'simple';
+  const isForge = launchMode === 'forge';
+  const preview = buildPreview(xms, xmx, jar, extraFlags, launchMode);
   const isDirty =
     xms !== (config?.xms ?? '') ||
     xmx !== (config?.xmx ?? '') ||
-    jar !== (config?.jar ?? '') ||
+    (!isForge && jar !== (config?.jar ?? '')) ||
     extraFlags !== (config?.extraFlags ?? '');
+
+  const saveDisabled = saving || !isDirty || (!isForge && !jar.trim());
 
   async function handleSave() {
     const ok = await save({ xms, xmx, jar, extraFlags });
@@ -103,19 +107,21 @@ export const JVMParametersEditor: React.FC<JVMParametersEditorProps> = ({
                 </div>
               </div>
 
-              <div className="jvm-section">
-                <h3 className="jvm-section__title">JAR File</h3>
-                <label className="jvm-field">
-                  <span className="jvm-field__label">JAR filename</span>
-                  <input
-                    className="jvm-field__input"
-                    type="text"
-                    value={jar}
-                    onChange={e => setJar(e.target.value)}
-                    placeholder="e.g. paper-1.21.jar"
-                  />
-                </label>
-              </div>
+              {!isForge && (
+                <div className="jvm-section">
+                  <h3 className="jvm-section__title">JAR File</h3>
+                  <label className="jvm-field">
+                    <span className="jvm-field__label">JAR filename</span>
+                    <input
+                      className="jvm-field__input"
+                      type="text"
+                      value={jar}
+                      onChange={e => setJar(e.target.value)}
+                      placeholder="e.g. paper-1.21.jar"
+                    />
+                  </label>
+                </div>
+              )}
 
               <div className="jvm-section">
                 <h3 className="jvm-section__title">Extra JVM Flags</h3>
@@ -131,6 +137,9 @@ export const JVMParametersEditor: React.FC<JVMParametersEditorProps> = ({
               <div className="jvm-section">
                 <h3 className="jvm-section__title">Command Preview</h3>
                 <code className="jvm-command-example">{preview || '(fill in the fields above)'}</code>
+                {isForge && (
+                  <p className="jvm-section__description">Saved to <code>user_jvm_args.txt</code> — Forge manages the rest of the launch command.</p>
+                )}
               </div>
 
               {saveError && (
@@ -148,9 +157,9 @@ export const JVMParametersEditor: React.FC<JVMParametersEditorProps> = ({
             <button
               className="btn btn--primary"
               onClick={handleSave}
-              disabled={saving || !isDirty || !jar.trim()}
+              disabled={saveDisabled}
             >
-              {saving ? 'Saving…' : saved ? 'Saved!' : 'Save to start.sh'}
+              {saving ? 'Saving…' : saved ? 'Saved!' : isForge ? 'Save to user_jvm_args.txt' : 'Save to start.sh'}
             </button>
           )}
         </div>

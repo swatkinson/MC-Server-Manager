@@ -108,6 +108,7 @@ export interface StartupScriptConfig {
   jar: string;
   extraFlags: string;
   rawCommand: string;
+  launchMode: 'simple' | 'forge';
 }
 
 export interface WhitelistEntry {
