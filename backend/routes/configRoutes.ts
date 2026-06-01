@@ -142,18 +142,21 @@ export function createConfigRouter(
     requireRole('admin', 'moderator'),
     asyncRoute(async (req, res) => {
       const { xms, xmx, jar, extraFlags } = req.body ?? {};
-      if (typeof jar !== 'string' || !jar.trim()) {
+      const mode = await startupScriptManager.getMode();
+      // Forge argfile mode has no runnable jar; only the classic script needs one.
+      if (mode === 'script' && (typeof jar !== 'string' || !jar.trim())) {
         fail(res, 400, 'JAR filename is required');
         return;
       }
       try {
         await startupScriptManager.write({
+          mode,
           xms: typeof xms === 'string' ? xms.trim() : '',
           xmx: typeof xmx === 'string' ? xmx.trim() : '',
-          jar: jar.trim(),
+          jar: typeof jar === 'string' ? jar.trim() : '',
           extraFlags: typeof extraFlags === 'string' ? extraFlags.trim() : '',
         });
-        void auditLogger.log(req.user ?? null, 'config.jvm', { xms, xmx, jar });
+        void auditLogger.log(req.user ?? null, 'config.jvm', { mode, xms, xmx, jar });
         res.json({ success: true });
       } catch (error) {
         fail(res, 500, 'Failed to write startup script', error);

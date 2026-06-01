@@ -50,7 +50,7 @@ All env-driven configuration lives in `backend/config.ts` (`MINECRAFT_DIR`, `MC_
 | `UserStore` | Persists user accounts (id, username, passwordHash, role) to `users.json`; CRUD operations for admin/moderator/user accounts |
 | `AuthService` | JWT-based authentication (bcrypt password hashing, 8-hour tokens); issues and validates `mc_auth` session cookies |
 | `ServerInfoStore` | Persists server metadata (version, serverType) to `server-info.json` |
-| `StartupScriptManager` | Reads and writes `start.sh`, parsing and reconstructing JVM flags (`-Xms`, `-Xmx`, `-jar`, extra flags) |
+| `StartupScriptManager` | Reads and writes JVM flags (`-Xms`, `-Xmx`, extra flags). Auto-detects mode: `argfile` manages Forge/NeoForge `user_jvm_args.txt` (one flag per line, no jar, comment header preserved) when it exists; otherwise `script` parses/reconstructs the classic `java … -jar` line in `start.sh` |
 
 `backend/server.ts` instantiates all services, wires routes and Socket.IO events, and starts the HTTP server.
 

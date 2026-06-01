@@ -22,6 +22,9 @@ export const config = {
   whitelistPath: path.join(minecraftDir, 'whitelist.json'),
   opsPath: path.join(minecraftDir, 'ops.json'),
   startScript: process.env.START_SCRIPT || path.join(minecraftDir, 'start.sh'),
+  // Forge/NeoForge launch JVM args from this file (referenced as @user_jvm_args.txt
+  // in start.sh). When it exists, the JVM editor manages this file instead of start.sh.
+  jvmArgsFile: process.env.JVM_ARGS_FILE || path.join(minecraftDir, 'user_jvm_args.txt'),
   storagePath,
   usersPath: path.join(storagePath, 'users.json'),
   restartSchedulePath: path.join(serverManagerDir, 'restart-schedule.json'),

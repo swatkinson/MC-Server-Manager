@@ -9,12 +9,25 @@ interface JVMParametersEditorProps {
   serverRunning?: boolean;
 }
 
-function buildPreview(xms: string, xmx: string, jar: string, extraFlags: string): string {
+type Mode = StartupScriptConfig['mode'];
+
+function buildPreview(
+  mode: Mode,
+  xms: string,
+  xmx: string,
+  jar: string,
+  extraFlags: string,
+): string {
   const parts = ['java'];
   if (xms) parts.push(`-Xms${xms}`);
   if (xmx) parts.push(`-Xmx${xmx}`);
-  if (extraFlags.trim()) parts.push(extraFlags.trim());
-  if (jar) parts.push('-jar', jar, 'nogui');
+  const flags = extraFlags.split(/\s+/).filter(Boolean);
+  if (mode === 'argfile') {
+    parts.push(...flags, '@user_jvm_args.txt', '@libraries/.../unix_args.txt', 'nogui');
+  } else {
+    if (extraFlags.trim()) parts.push(extraFlags.trim());
+    if (jar) parts.push('-jar', jar, 'nogui');
+  }
   return parts.join(' ');
 }
 
@@ -31,6 +44,9 @@ export const JVMParametersEditor: React.FC<JVMParametersEditorProps> = ({
   const [extraFlags, setExtraFlags] = useState('');
   const [saved, setSaved] = useState(false);
 
+  const mode: Mode = config?.mode ?? 'script';
+  const isArgfile = mode === 'argfile';
+
   useEffect(() => {
     if (config) {
       setXms(config.xms);
@@ -42,15 +58,17 @@ export const JVMParametersEditor: React.FC<JVMParametersEditorProps> = ({
 
   if (!isOpen) return null;
 
-  const preview = buildPreview(xms, xmx, jar, extraFlags);
+  const preview = buildPreview(mode, xms, xmx, jar, extraFlags);
   const isDirty =
     xms !== (config?.xms ?? '') ||
     xmx !== (config?.xmx ?? '') ||
     jar !== (config?.jar ?? '') ||
     extraFlags !== (config?.extraFlags ?? '');
+  const canSave = isArgfile ? true : Boolean(jar.trim());
+  const targetFile = isArgfile ? 'user_jvm_args.txt' : 'start.sh';
 
   async function handleSave() {
-    const ok = await save({ xms, xmx, jar, extraFlags });
+    const ok = await save({ mode, xms, xmx, jar, extraFlags });
     if (ok) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -77,6 +95,13 @@ export const JVMParametersEditor: React.FC<JVMParametersEditorProps> = ({
             <p className="jvm-section__description">Loading startup script…</p>
           ) : (
             <>
+              {isArgfile && (
+                <p className="jvm-section__description">
+                  This is a Forge/NeoForge server — flags are read from{' '}
+                  <code>user_jvm_args.txt</code> at launch. There is no <code>-jar</code> to set.
+                </p>
+              )}
+
               <div className="jvm-section">
                 <h3 className="jvm-section__title">Memory</h3>
                 <div className="jvm-fields">
@@ -87,7 +112,7 @@ export const JVMParametersEditor: React.FC<JVMParametersEditorProps> = ({
                       type="text"
                       value={xms}
                       onChange={e => setXms(e.target.value)}
-                      placeholder="e.g. 2G"
+                      placeholder="e.g. 8G"
                     />
                   </label>
                   <label className="jvm-field">
@@ -103,19 +128,21 @@ export const JVMParametersEditor: React.FC<JVMParametersEditorProps> = ({
                 </div>
               </div>
 
-              <div className="jvm-section">
-                <h3 className="jvm-section__title">JAR File</h3>
-                <label className="jvm-field">
-                  <span className="jvm-field__label">JAR filename</span>
-                  <input
-                    className="jvm-field__input"
-                    type="text"
-                    value={jar}
-                    onChange={e => setJar(e.target.value)}
-                    placeholder="e.g. paper-1.21.jar"
-                  />
-                </label>
-              </div>
+              {!isArgfile && (
+                <div className="jvm-section">
+                  <h3 className="jvm-section__title">JAR File</h3>
+                  <label className="jvm-field">
+                    <span className="jvm-field__label">JAR filename</span>
+                    <input
+                      className="jvm-field__input"
+                      type="text"
+                      value={jar}
+                      onChange={e => setJar(e.target.value)}
+                      placeholder="e.g. paper-1.21.jar"
+                    />
+                  </label>
+                </div>
+              )}
 
               <div className="jvm-section">
                 <h3 className="jvm-section__title">Extra JVM Flags</h3>
@@ -124,7 +151,7 @@ export const JVMParametersEditor: React.FC<JVMParametersEditorProps> = ({
                   value={extraFlags}
                   onChange={e => setExtraFlags(e.target.value)}
                   placeholder="-XX:+UseG1GC -XX:ParallelGCThreads=4"
-                  rows={3}
+                  rows={isArgfile ? 8 : 3}
                 />
               </div>
 
@@ -148,9 +175,9 @@ export const JVMParametersEditor: React.FC<JVMParametersEditorProps> = ({
             <button
               className="btn btn--primary"
               onClick={handleSave}
-              disabled={saving || !isDirty || !jar.trim()}
+              disabled={saving || !isDirty || !canSave}
             >
-              {saving ? 'Saving…' : saved ? 'Saved!' : 'Save to start.sh'}
+              {saving ? 'Saving…' : saved ? 'Saved!' : `Save to ${targetFile}`}
             </button>
           )}
         </div>

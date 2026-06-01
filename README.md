@@ -71,7 +71,7 @@ Drop this dashboard beside any vanilla or modded Minecraft Java server on Ubuntu
 ### Phase 3 — Player Management & Configuration
 - [x] Online player list (parsed from server log)
 - [x] Server configuration editor (`server.properties`)
-- [x] JVM parameters reference panel
+- [x] JVM parameters editor (auto-detects Forge/NeoForge `user_jvm_args.txt` vs. classic `start.sh -jar`)
 - [x] Whitelist manager (add / remove / enforce toggle)
 - [x] World file download/backup (streamed tar.gz)
 - [ ] Kick / ban / op controls
@@ -145,6 +145,7 @@ All configuration is driven by environment variables (`.env` file or systemd `En
 | `WORLD_PATH` | auto-detect from `level-name` | Override world directory path |
 | `LOG_PATH` | `MINECRAFT_DIR/logs/latest.log` | Override log file path |
 | `START_SCRIPT` | `MINECRAFT_DIR/start.sh` | Override start script path |
+| `JVM_ARGS_FILE` | `MINECRAFT_DIR/user_jvm_args.txt` | Forge/NeoForge JVM args file; when present, the JVM editor manages it instead of `start.sh` |
 | `SERVER_PROPERTIES_PATH` | `MINECRAFT_DIR/server.properties` | Override server.properties path |
 | `MC_SCREEN_SESSION` | `minecraft` | Name of the screen session |
 | `PORT` | `3001` (dev) / `80` (prod) | HTTP port |

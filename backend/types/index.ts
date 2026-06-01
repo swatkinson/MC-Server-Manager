@@ -105,6 +105,9 @@ export interface ServerInfo {
 }
 
 export interface StartupScriptConfig {
+  // 'argfile' = Forge/NeoForge user_jvm_args.txt (one flag per line, no jar);
+  // 'script'  = classic start.sh `java … -jar <file>` line.
+  mode: 'script' | 'argfile';
   xms: string;
   xmx: string;
   jar: string;
