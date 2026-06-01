@@ -71,8 +71,18 @@ function parseUserJvmArgs(content: string): Omit<ScriptParams, 'jar'> {
   return { xms, xmx, extraFlags: extra.join(' ') };
 }
 
-function buildUserJvmArgs(cfg: Omit<ScriptParams, 'jar'>): string {
-  const lines: string[] = [];
+// Pull the `#` comment lines out of an existing file so they survive a rewrite
+// (e.g. notes explaining why a flag is present/omitted).
+function extractComments(content: string): string[] {
+  return content
+    .split('\n')
+    .map((l) => l.replace(/\s+$/, ''))
+    .filter((l) => l.trim().startsWith('#'));
+}
+
+function buildUserJvmArgs(cfg: Omit<ScriptParams, 'jar'>, comments: string[] = []): string {
+  const lines: string[] = [...comments];
+  if (comments.length) lines.push('');
   if (cfg.xms) lines.push(`-Xms${cfg.xms}`);
   if (cfg.xmx) lines.push(`-Xmx${cfg.xmx}`);
   if (cfg.extraFlags.trim()) {
@@ -129,7 +139,15 @@ export class StartupScriptManager {
 
   async write(cfg: ScriptParams): Promise<void> {
     if (await this.detectForgeMode()) {
-      await fs.writeFile(this.userJvmArgsPath, buildUserJvmArgs(cfg), 'utf-8');
+      // Re-read the existing file to preserve its comment header on round-trip.
+      let existing = '';
+      try {
+        existing = await fs.readFile(this.userJvmArgsPath, 'utf-8');
+      } catch {
+        // No existing file — write with no preserved comments.
+      }
+      const comments = extractComments(existing);
+      await fs.writeFile(this.userJvmArgsPath, buildUserJvmArgs(cfg, comments), 'utf-8');
       return;
     }
 
