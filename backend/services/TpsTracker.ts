@@ -16,6 +16,12 @@ function stripColors(text: string): string {
   return text.replace(/§[0-9a-fk-or]/gi, '');
 }
 
+// Spark prefixes every line of its output with a lightning glyph: "[⚡] ".
+// Strip it so the payload can be parsed/matched like any other line.
+function stripSparkPrefix(text: string): string {
+  return text.replace(/\[?⚡\]?/g, '').replace(/^\s+/, '');
+}
+
 export class TpsTracker {
   private tps: number | null = null;
   private mspt: number | null = null;
@@ -75,6 +81,7 @@ export class TpsTracker {
    */
   observe(line: LogLine): boolean {
     const message = stripColors(line.message);
+    const isSpark = message.includes('⚡');
     let matched = false;
 
     // Paper / Purpur / Spigot `/tps` output:
@@ -115,16 +122,17 @@ export class TpsTracker {
       matched = true;
     }
 
-    // Spark `/spark tps` outputs two separate log lines:
-    //   Line 1 (header): "TPS from last 5s, 10s, 1m, 5m, 15m:"
-    //   Line 2 (values): " 20.0, 20.0, 20.0, 20.0, 20.0"
+    // Spark `/spark tps` output (every line prefixed with "[⚡] "):
+    //   header: "TPS from last 5s, 10s, 1m, 5m, 15m:"
+    //   values: " *20.0, 20.0, *20.0, *20.0, *20.0"  (the "*" marks capped values)
     // Detect the header and record the timestamp so the values line can be matched next.
-    if (/TPS from last\s+5s\b[^:]*:\s*$/.test(message.trim())) {
+    const sparkBody = stripSparkPrefix(message);
+    if (/TPS from last\s+5s\b[^:]*:\s*$/.test(sparkBody.trim())) {
       this.sparkHeaderMs = Date.now();
       return Date.now() - this.lastPollMs < CONSUME_WINDOW_MS;
     }
     if (this.sparkHeaderMs > 0 && Date.now() - this.sparkHeaderMs < 2000) {
-      const sparkVal = message.trim().match(/^(\d+(?:\.\d+)?)[\s,]/);
+      const sparkVal = sparkBody.trim().match(/^\*?(\d+(?:\.\d+)?)[\s,]/);
       if (sparkVal) {
         this.tps = parseFloat(sparkVal[1]);
         this.source = 'spark';
@@ -140,6 +148,12 @@ export class TpsTracker {
     // and the per-dimension forge lines so the console panel stays clean.
     const withinWindow = Date.now() - this.lastPollMs < CONSUME_WINDOW_MS;
     if (!withinWindow) return false;
+
+    // Any Spark-prefixed line within the poll window is our `spark tps` probe
+    // output (tick-duration rows, CPU usage, blank "[⚡]" spacers). Swallow it.
+    if (isSpark) {
+      return true;
+    }
 
     // Vanilla / Paper unknown-command echoes with the caret marker, e.g.:
     //   "Unknown or incomplete command, see below for error"
