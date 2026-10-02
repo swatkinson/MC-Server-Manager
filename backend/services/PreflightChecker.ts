@@ -3,6 +3,8 @@ import { constants as fsConstants } from 'fs';
 import { promisify } from 'util';
 import { execFile } from 'child_process';
 import { config } from '../config.js';
+import { findJavaPid } from './processUtils.js';
+import { readHsperfdataForPid } from './hsperfdata.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -171,6 +173,18 @@ async function checkScreenSessionRunning(): Promise<PreflightCheck> {
   }
 }
 
+async function checkJvmCounters(): Promise<PreflightCheck> {
+  const base = { id: 'jvm-counters', label: 'JVM memory counters' };
+  const pid = await findJavaPid();
+  if (!pid) return { ...base, severity: 'ok', message: 'Server not running — checked once the JVM starts.' };
+  if (await readHsperfdataForPid(pid)) return { ...base, severity: 'ok', message: 'Reading heap and GC counters from hsperfdata.' };
+  return {
+    ...base,
+    severity: 'warn',
+    message: 'Cannot read the JVM perf file. Remove -XX:+PerfDisableSharedMem from the JVM flags to get heap/GC insight; the memory graph falls back to process RSS.',
+  };
+}
+
 export async function runPreflightChecks(): Promise<PreflightCheck[]> {
   return Promise.all([
     checkMinecraftDir(),
@@ -181,7 +195,7 @@ export async function runPreflightChecks(): Promise<PreflightCheck[]> {
     checkBinary('bin-screen', 'screen', 'error', 'send console commands and detach the server'),
     checkBinary('bin-pgrep', 'pgrep', 'error', 'detect whether the server process is running'),
     checkBinary('bin-pkill', 'pkill', 'error', 'force-stop the server if it does not respond'),
-    checkBinary('bin-jstat', 'jstat', 'warn', 'read JVM heap metrics (gauge will fall back to system RAM only without it)'),
+    checkJvmCounters(),
     checkScreenSessionRunning(),
   ]);
 }

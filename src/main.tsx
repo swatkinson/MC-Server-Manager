@@ -13,13 +13,17 @@ import { Dashboard } from './pages/Dashboard'
 import { LoginPage } from './pages/LoginPage'
 import { AccountsPage } from './pages/AccountsPage'
 import { AuditLogPage } from './pages/AuditLogPage'
+import { ModConfigsPage } from './pages/ModConfigsPage'
+import { BackupsPage } from './pages/BackupsPage'
+import { SettingsPage } from './pages/SettingsPage'
+import { AppShell } from './components/AppShell'
 import { ToastProvider } from './context/ToastContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ToastContainer } from './components/ToastContainer'
 import './styles/app.css'
 
 // Protected routes — redirect to /login when not authenticated
-const PROTECTED = new Set(['/', '/accounts', '/audit'])
+const PROTECTED = new Set(['/', '/configs', '/backups', '/settings', '/accounts', '/audit'])
 
 function RootLayout() {
   const { user, loading, setupRequired } = useAuth()
@@ -37,17 +41,16 @@ function RootLayout() {
     }
   }, [loading, user, setupRequired, pathname, navigate])
 
-  if (loading) {
-    return (
-      <div className="auth-page">
-        <div className="auth-card__loading">Loading…</div>
-      </div>
-    )
-  }
-
   return (
     <>
-      <Outlet />
+      <div className="app-bg" aria-hidden="true" />
+      {loading ? (
+        <div className="auth-page">
+          <div className="auth-card__loading">Loading…</div>
+        </div>
+      ) : (
+        <Outlet />
+      )}
       <ToastContainer />
     </>
   )
@@ -61,25 +64,27 @@ const loginRoute = createRoute({
   component: LoginPage,
 })
 
-const indexRoute = createRoute({
+// Pathless layout: sidebar + top bar around every signed-in page.
+const shellRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/',
-  component: Dashboard,
+  id: 'shell',
+  component: AppShell,
 })
 
-const accountsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/accounts',
-  component: AccountsPage,
-})
+const page = (path: string, component: () => JSX.Element) =>
+  createRoute({ getParentRoute: () => shellRoute, path, component })
 
-const auditRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/audit',
-  component: AuditLogPage,
-})
-
-const routeTree = rootRoute.addChildren([loginRoute, indexRoute, accountsRoute, auditRoute])
+const routeTree = rootRoute.addChildren([
+  loginRoute,
+  shellRoute.addChildren([
+    page('/', Dashboard),
+    page('/configs', ModConfigsPage),
+    page('/backups', BackupsPage),
+    page('/settings', SettingsPage),
+    page('/accounts', AccountsPage),
+    page('/audit', AuditLogPage),
+  ]),
+])
 
 const router = createRouter({ routeTree })
 

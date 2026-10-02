@@ -23,14 +23,21 @@ const LOG_LEVEL_CLASSES: Record<LogLine['level'], string> = {
 
 export function ConsoleInterface({ logs, loading, error }: ConsoleInterfaceProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const endRef = useRef<HTMLDivElement>(null);
   const [activeTooltip, setActiveTooltip] = useState<ConsoleTooltip | null>(null);
 
+  // Track whether the reader is pinned to the bottom; only then follow new lines.
+  // (scrollIntoView would also scroll the page itself, yanking the dashboard.)
+  const pinnedRef = useRef(true);
+
   useEffect(() => {
-    if (endRef.current) {
-      endRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    const el = containerRef.current;
+    if (el && pinnedRef.current) el.scrollTop = el.scrollHeight;
   }, [logs]);
+
+  const handleScroll = () => {
+    const el = containerRef.current;
+    if (el) pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  };
 
   const renderLogLine = (log: LogLine, index: number) => {
     const levelClass = LOG_LEVEL_CLASSES[log.level];
@@ -58,7 +65,7 @@ export function ConsoleInterface({ logs, loading, error }: ConsoleInterfaceProps
 
   return (
     <div className="console-interface">
-      <div className="console-interface__container" ref={containerRef}>
+      <div className="console-interface__container" ref={containerRef} onScroll={handleScroll}>
         {loading && (
           <div className="console-interface__placeholder">
             <p>Loading console logs...</p>
@@ -78,7 +85,6 @@ export function ConsoleInterface({ logs, loading, error }: ConsoleInterfaceProps
         )}
 
         {logs.map((log, index) => renderLogLine(log, index))}
-        <div ref={endRef} />
       </div>
 
       {activeTooltip && createPortal(

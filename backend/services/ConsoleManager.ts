@@ -16,7 +16,10 @@ export function isValidCommand(command: string): boolean {
   return trimmed.length > 0 && trimmed.length <= 500 && COMMAND_REGEX.test(trimmed);
 }
 
-type LineCallback = (line: LogLine) => void;
+// Returns true when the line was consumed (e.g. a TPS probe reply) and should
+// stay out of the console.
+type LineCallback = (line: LogLine) => boolean;
+type HistoryFilter = (line: LogLine) => boolean;
 type PlayersCallback = (players: Player[]) => void;
 
 export class ConsoleManager {
@@ -26,24 +29,33 @@ export class ConsoleManager {
   private onPlayersUpdate: PlayersCallback | null = null;
   private pollTimer: NodeJS.Timeout | null = null;
   private polling = false;
+  // Lines the console has shown, newest last. Served to clients on load so
+  // history matches the live stream (minus probe replies).
+  private history: LogLine[] = [];
 
-  async getLogs(limit: number = 50): Promise<LogLine[]> {
+  getLogs(limit: number = 50): LogLine[] {
     const bounded = Math.max(1, Math.min(limit, config.maxConsoleLogLimit));
+    return this.history.slice(-bounded);
+  }
+
+  private remember(line: LogLine): void {
+    this.history.push(line);
+    const overflow = this.history.length - config.maxConsoleLogLimit;
+    if (overflow > 0) this.history.splice(0, overflow);
+  }
+
+  // Seed history from the tail of latest.log, dropping lines `isNoise` flags.
+  private async seedHistory(isNoise: HistoryFilter): Promise<void> {
     try {
       const content = await fs.readFile(config.logPath, 'utf-8');
-      const logLines: LogLine[] = [];
-
-      for (const line of content.split('\n')) {
-        if (!line.trim()) continue;
-        const parsed = this.parseLine(line);
-        if (parsed) logLines.push(parsed);
+      for (const raw of content.split('\n')) {
+        const parsed = this.parseLine(raw);
+        if (!parsed) continue;
+        if (!isNoise(parsed)) this.remember(parsed);
+        this.checkForPlayerEvents(parsed);
       }
-
-      return logLines.slice(-bounded);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
-      console.error('Error reading logs:', error);
-      return [];
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') console.error('Error reading logs:', error);
     }
   }
 
@@ -52,8 +64,9 @@ export class ConsoleManager {
     this.onPlayersUpdate = onPlayersUpdate;
   }
 
-  async watchLogs(callback: LineCallback): Promise<void> {
+  async watchLogs(callback: LineCallback, isNoise: HistoryFilter): Promise<void> {
     if (this.pollTimer) return;
+    await this.seedHistory(isNoise);
 
     // Seed position from the current end of file so we don't replay history.
     // If the file doesn't exist yet, the poller will pick it up when it appears.
@@ -147,7 +160,7 @@ export class ConsoleManager {
         if (!line.trim()) continue;
         const parsed = this.parseLine(line);
         if (!parsed) continue;
-        callback(parsed);
+        if (!callback(parsed)) this.remember(parsed);
         this.checkForPlayerEvents(parsed);
       }
     } catch (error) {
@@ -199,6 +212,15 @@ export class ConsoleManager {
 
     // Forge messages include a mod bracket prefix: "[net.minecraft.server.MinecraftServer/]: "
     const msg = logLine.message.replace(/^\[[^\]]*\]:\s*/, '');
+
+    // Reply to `list`: "There are 2 of a max of 20 players online: Alice, Bob"
+    const listMatch = msg.match(/^There are \d+ (?:of a max of|\/) ?\d+ players online:\s*(.*)$/);
+    if (listMatch) {
+      const names = listMatch[1].split(',').map((n) => n.trim()).filter(Boolean);
+      this.playerManager.syncOnline(names);
+      this.onPlayersUpdate(this.playerManager.getOnlinePlayers());
+      return;
+    }
 
     const joinMatch = msg.match(/^(.+?)\s+joined the game$/);
     if (joinMatch) {

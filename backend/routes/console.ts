@@ -21,7 +21,7 @@ export function createConsoleRouter(
       try {
         const requested = parseInt(req.query.limit as string, 10);
         const limit = Number.isFinite(requested) ? Math.min(Math.max(1, requested), 1000) : 50;
-        const logs = await consoleManager.getLogs(limit);
+        const logs = consoleManager.getLogs(limit);
         res.json({ logs });
       } catch (error) {
         fail(res, 500, 'Failed to get console logs', error);

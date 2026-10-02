@@ -13,7 +13,7 @@ export function ConsolePanel({ readOnly = false }: ConsolePanelProps) {
     loading: logsLoading,
     error: logsError,
     connected: socketConnected,
-  } = useConsoleLogs(100);
+  } = useConsoleLogs(300);
 
   const {
     executeCommand,
@@ -28,18 +28,11 @@ export function ConsolePanel({ readOnly = false }: ConsolePanelProps) {
   return (
     <div className="console-panel">
       <div className="console-panel__header">
-        <h2>Server Console</h2>
-        <div className="console-panel__status">
-          <span
-            className="console-panel__status-dot"
-            style={{
-              backgroundColor: socketConnected ? '#22c55e' : '#ef4444',
-            }}
-          />
-          <span className="console-panel__status-text">
-            {socketConnected ? 'Live' : 'Polling'}
-          </span>
-        </div>
+        <h2 className="card__title">Console</h2>
+        <span className={`live-pill ${socketConnected ? 'live-pill--on' : ''}`}>
+          <span className="live-pill__dot" />
+          {socketConnected ? 'Live' : 'Polling'}
+        </span>
       </div>
 
       <div className="console-panel__content">

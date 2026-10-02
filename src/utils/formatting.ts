@@ -18,32 +18,29 @@ export function formatBytes(bytes: number, decimals: number = 2): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
-/**
- * Format percentage value with proper rounding
- */
-export function formatPercentage(value: number, decimals: number = 1): string {
-  if (value == null) return '0%';
-  return Math.min(100, Math.max(0, parseFloat(value.toFixed(decimals)))) + '%';
+export function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
 }
 
-/**
- * Determine color based on percentage threshold
- * Green: 0-70%, Amber: 70-85%, Red: 85-100%
- */
-export function getColorByPercentage(percentage: number): 'green' | 'amber' | 'red' {
-  if (percentage < 70) return 'green';
-  if (percentage < 85) return 'amber';
-  return 'red';
-}
-
-/**
- * Get CSS color variable for a given color zone
- */
-export function getCssColorForZone(zone: 'green' | 'amber' | 'red'): string {
-  const colorMap = {
-    green: 'var(--green)',
-    amber: 'var(--yellow)',
-    red: 'var(--red)',
-  };
-  return colorMap[zone];
+export function formatRelative(ms: number): string {
+  const diff = Date.now() - ms;
+  const abs = Math.abs(diff);
+  const future = diff < 0;
+  const units: Array<[number, string]> = [
+    [86_400_000, 'd'],
+    [3_600_000, 'h'],
+    [60_000, 'm'],
+  ];
+  for (const [size, label] of units) {
+    if (abs >= size) {
+      const n = Math.floor(abs / size);
+      return future ? `in ${n}${label}` : `${n}${label} ago`;
+    }
+  }
+  return future ? 'in <1m' : 'just now';
 }

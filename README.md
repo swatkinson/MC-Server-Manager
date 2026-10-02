@@ -57,21 +57,25 @@ Drop this dashboard beside any vanilla or modded Minecraft Java server on Ubuntu
 
 ### Phase 1 — MVP & CI/CD Pipeline
 - [x] Basic dashboard UI (TanStack Router + React + Vite)
-- [x] Automated deployment via GitHub Actions → rsync → systemd
+- [x] Automated deployment via GitHub Actions → copy → systemd
 
 ### Phase 2 — Dashboard & Server Control
-- [x] Server status header with name, IP, MOTD, and status
+- [x] Glass UI over a blurred background photo, sidebar navigation (Overview, Mod Configs, Backups, Server Settings, Accounts, Audit Log)
+- [x] Top bar with MOTD, status, version, uptime and TPS
 - [x] Server control buttons: start / stop / restart
 - [x] Live console display with command input
-- [x] System monitoring gauges: CPU, RAM, Storage (arc gauges)
+- [x] Overview tiles: players, TPS/MSPT, Minecraft memory, CPU, storage
+- [x] JVM memory insight: live heap after GC, heap in use, Java RSS, GC pause share, full GCs, pressure verdict and a 1 h history graph (read from hsperfdata — no jstat, no attach)
+- [x] System card: VM memory split (Java / other / free), per-core CPU, disk
 - [x] Real start / stop / restart (via `screen` + `start.sh`)
 - [x] Live server status (online/offline, uptime)
 - [x] TPS / MSPT monitoring (Paper, Forge, Spark)
 
 ### Phase 3 — Player Management & Configuration
-- [x] Online player list (parsed from server log)
+- [x] Online player list (parsed from server log, real UUIDs from usercache.json, re-synced with `list` after a panel restart)
 - [x] Server configuration editor (`server.properties`)
-- [x] JVM parameters reference panel
+- [x] JVM parameters editor (`user_jvm_args.txt` for Forge)
+- [x] Mod config editor: browse/search/edit `config/`, `world/serverconfig/`, `defaultconfigs/` with stale-write protection and per-file version history
 - [x] Whitelist manager (add / remove / enforce toggle)
 - [x] World file download/backup (streamed tar.gz)
 - [ ] Kick / ban / op controls
@@ -80,12 +84,14 @@ Drop this dashboard beside any vanilla or modded Minecraft Java server on Ubuntu
 ### Phase 4 — Console & Logs
 - [x] Live log streaming (WebSocket via Socket.IO)
 - [x] In-browser console (send commands to server)
+- [x] Console history excludes the panel's own TPS probe output
 - [ ] Log history and search
 
 ### Phase 5 — Backups & Scheduling
 - [x] One-shot world backup download
 - [ ] Plugin/mod listing
-- [ ] Automated backup scheduling and management
+- [x] Backups page backed by the Proxmox host's `mc-world-backup` job: list, back up now, download, restore (server must be stopped; previous world kept)
+- [x] Crash detection → Discord notification
 
 ### Phase 6 — Authentication & Access Control
 - [x] Account-based authentication (JWT cookies)
@@ -148,7 +154,8 @@ All configuration is driven by environment variables (`.env` file or systemd `En
 | `SERVER_PROPERTIES_PATH` | `MINECRAFT_DIR/server.properties` | Override server.properties path |
 | `MC_SCREEN_SESSION` | `minecraft` | Name of the screen session |
 | `PORT` | `3001` (dev) / `80` (prod) | HTTP port |
-| `BACKUP_DIR` | `MINECRAFT_DIR/mc-server-manager-backups` | Where backups are stored |
+| `BACKUP_HOST` | — | `user@host` running `mc-backup-gateway` (also settable on the Backups page) |
+| `BACKUP_SSH_KEY` | `~/.ssh/mc-backup-gateway` | Private key whose `authorized_keys` entry forces the gateway |
 
 `NODE_ENV=production` enables static file serving from `dist/` (set automatically by the systemd unit).
 
@@ -156,9 +163,9 @@ All configuration is driven by environment variables (`.env` file or systemd `En
 
 Features degrade gracefully if these are absent:
 
-- `jstat` — JVM heap metrics (part of JDK, not JRE)
-- `spark` plugin — enhanced TPS metrics on Forge/Paper servers
-- `rsync` — required for backup restore operations
+- JVM perf counters (`hsperfdata`) — heap/GC insight. Don't launch with `-XX:+PerfDisableSharedMem`; without them the memory card falls back to process RSS
+- `spark` — its `tps` output is parsed if you run it, but the panel only probes with `forge tps` (Forge) or `tps`/`mspt` (Paper)
+- `ssh` + a backup host running `mc-backup-gateway` — the Backups page
 
 ### Server Type Compatibility
 
@@ -167,7 +174,7 @@ Features degrade gracefully if these are absent:
 | Console, start/stop, metrics | ✓ | ✓ | ✓ | ✓ |
 | TPS (`tps` command) | — | ✓ | ✓ | ✓ |
 | TPS (Spark plugin) | — | ✓ | ✓ | ✓ |
-| JVM heap metrics (`jstat`) | ✓ | ✓ | ✓ | ✓ |
+| JVM heap/GC metrics (hsperfdata) | ✓ | ✓ | ✓ | ✓ |
 
 ---
 
@@ -205,13 +212,34 @@ GitHub Actions runner that lives on the same Ubuntu host as the Minecraft
 server. Every push to `main` (or manual `workflow_dispatch`):
 
 1. Installs deps and runs `npm run build:prod`
-2. Rsyncs `dist/`, `package.json`, `package-lock.json`, and the systemd unit
+2. Copies `dist/` (temp dir + swap), `package.json`, `package-lock.json`, and the systemd unit
    to `~/mc-server-manager` on the host
 3. Runs `npm ci --omit=dev` on the host
-4. Restarts the `mc-server-manager` systemd service
+4. Restarts the `mc-server-manager` systemd service — only the panel; the unit's
+   `KillMode=process` leaves a panel-launched Minecraft server running
 5. Verifies the service is active
 
 The service unit at `mc-server-manager.service` binds the Node process to
 port 80 directly via `CAP_NET_BIND_SERVICE`; nginx is no longer used.
 
 See `DEPLOYMENT_SETUP.md` for one-time host setup.
+
+---
+
+## Backups
+
+Backups are made on the Proxmox host, not by the panel: `/usr/local/sbin/mc-world-backup`
+(timer `mc-world-backup.timer`) does `save-off` → `save-all flush` → tar of `world/` over SSH →
+`save-on`, keeps the newest `KEEP`, and writes a `.last-run.json` status per server.
+
+The panel reaches it through `/usr/local/sbin/mc-backup-gateway`, installed as a forced
+command in the host's `/root/.ssh/authorized_keys`:
+
+```
+command="/usr/local/sbin/mc-backup-gateway mc1",from="192.168.0.100",restrict ssh-ed25519 AAAA… mc-server-manager@mc1
+```
+
+That key can only `list`, `run` (one-off backup via a transient systemd unit) and
+`fetch <archive>` for that one server. Restores happen on the VM: the archive is streamed
+down, validated, and swapped in for the world folder (old world kept as
+`world.pre-restore-<timestamp>`, newest two retained). The server must be stopped.

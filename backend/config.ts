@@ -21,6 +21,7 @@ export const config = {
   serverPropertiesPath: process.env.SERVER_PROPERTIES_PATH || path.join(minecraftDir, 'server.properties'),
   whitelistPath: path.join(minecraftDir, 'whitelist.json'),
   opsPath: path.join(minecraftDir, 'ops.json'),
+  userCachePath: path.join(minecraftDir, 'usercache.json'),
   startScript: process.env.START_SCRIPT || path.join(minecraftDir, 'start.sh'),
   storagePath,
   usersPath: path.join(storagePath, 'users.json'),
@@ -33,6 +34,10 @@ export const config = {
   serverInfoPath: path.join(serverManagerDir, 'server-info.json'),
   auditLogPath: path.join(serverManagerDir, 'audit.log'),
   discordConfigPath: path.join(serverManagerDir, 'discord-config.json'),
-  backupConfigPath: path.join(serverManagerDir, 'backup-config.json'),
-  defaultBackupDir: process.env.BACKUP_DIR || path.join(minecraftDir, 'mc-server-manager-backups'),
+  backupGatewayPath: path.join(serverManagerDir, 'backup-gateway.json'),
+  backupGatewayDefaults: {
+    host: process.env.BACKUP_HOST || '',
+    keyPath: process.env.BACKUP_SSH_KEY || path.join(os.homedir(), '.ssh', 'mc-backup-gateway'),
+  },
+  configHistoryDir: path.join(serverManagerDir, 'config-history'),
 } as const;

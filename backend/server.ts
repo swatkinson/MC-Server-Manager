@@ -10,7 +10,8 @@ import { MetricsCollector } from './services/MetricsCollector.js';
 import { ConsoleManager } from './services/ConsoleManager.js';
 import { ConfigManager } from './services/ConfigManager.js';
 import { PlayerManager } from './services/PlayerManager.js';
-import { TpsTracker } from './services/TpsTracker.js';
+import { TpsTracker, isProbeNoise } from './services/TpsTracker.js';
+import { JvmInspector } from './services/JvmInspector.js';
 import { PortForwardChecker } from './services/PortForwardChecker.js';
 import { ServerInfoStore } from './services/ServerInfoStore.js';
 import { StartupScriptManager } from './services/StartupScriptManager.js';
@@ -33,6 +34,8 @@ import { createBackupsRouter } from './routes/backups.js';
 import { createWebhooksRouter } from './routes/webhooks.js';
 import { createAuditRouter } from './routes/audit.js';
 import { createSchedulerRouter } from './routes/scheduler.js';
+import { createModConfigsRouter } from './routes/modConfigs.js';
+import { ModConfigService } from './services/ModConfigService.js';
 
 if (!config.jwtSecret || config.jwtSecret.length < 32) {
   console.error('FATAL: JWT_SECRET env var must be set and at least 32 characters');
@@ -57,7 +60,8 @@ const io = new Server(httpServer, {
 
 const infoStore = new ServerInfoStore();
 const serverManager = new ServerManager(infoStore);
-const metricsCollector = new MetricsCollector();
+const jvmInspector = new JvmInspector();
+const metricsCollector = new MetricsCollector(jvmInspector);
 const consoleManager = new ConsoleManager();
 const configManager = new ConfigManager();
 const playerManager = new PlayerManager();
@@ -72,12 +76,14 @@ const userStore = new UserStore();
 const authService = new AuthService();
 const auditLogger = new AuditLogger(config.auditLogPath);
 const discordNotifier = new DiscordNotifier(config.discordConfigPath);
-const backupService = new BackupService(config.backupConfigPath, config.minecraftDir, config.defaultBackupDir);
+const modConfigService = new ModConfigService(config.minecraftDir, () => configManager.getWorldPath(), config.configHistoryDir);
+const backupService = new BackupService(config.backupGatewayPath, config.backupGatewayDefaults);
 
 metricsCollector.setTpsProvider(() => tpsTracker.getMetrics());
 tpsTracker.setRunningProbe(() => serverManager.isRunning());
 tpsTracker.setServerTypeProvider(() => infoStore.getServerType());
 tpsTracker.start();
+jvmInspector.start();
 
 // ── App middleware ───────────────────────────────────────────────────────────
 
@@ -88,8 +94,12 @@ app.use(
       : { origin: devOrigins, credentials: true, methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] },
   ),
 );
+// Caddy (CT 101) terminates TLS in front of the panel; trust private-range
+// proxies so req.secure reflects X-Forwarded-Proto and the auth cookie gets
+// the Secure flag over HTTPS (it stays non-Secure on direct LAN http access).
+app.set('trust proxy', 'loopback, uniquelocal');
 app.use(cookieParser());
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '3mb' }));
 
 if (config.isProduction) {
   app.use(express.static(distRoot, { index: false }));
@@ -115,11 +125,12 @@ if (config.isProduction) {
 app.use(createServerRouter(serverManager, portForwardChecker, auditLogger, discordNotifier, playerManager, configManager, authService, io, infoStore));
 app.use(createConsoleRouter(consoleManager, auditLogger, authService));
 app.use(createConfigRouter(configManager, startupScriptManager, auditLogger, authService, io));
-app.use(createMetricsRouter(metricsCollector, authService));
+app.use(createMetricsRouter(metricsCollector, jvmInspector, authService));
 app.use(createPlayersRouter(playerManager, authService));
-app.use(createBackupsRouter(backupService, auditLogger, authService));
+app.use(createBackupsRouter(backupService, serverManager, configManager, auditLogger, authService, io));
 app.use(createWebhooksRouter(discordNotifier, auditLogger, authService));
 app.use(createAuditRouter(auditLogger, authService));
+app.use(createModConfigsRouter(modConfigService, auditLogger, authService));
 app.use(createSchedulerRouter(restartScheduler, serverManager, portForwardChecker, authService, io));
 
 // ── Global error handler ─────────────────────────────────────────────────────
@@ -152,13 +163,47 @@ consoleManager.setPlayerManager(playerManager, (players) => {
 });
 
 consoleManager
-  .watchLogs((line) => {
-    const consumedByTps = tpsTracker.observe(line);
-    if (!consumedByTps) io.emit('console:line', line);
+  .watchLogs(
+    (line) => {
+      if (/Stopping the server/.test(line.message)) serverManager.markIntentionalStop();
+      const consumedByTps = tpsTracker.observe(line);
+      if (!consumedByTps) io.emit('console:line', line);
+      return consumedByTps;
+    },
+    (line) => isProbeNoise(line.message),
+  )
+  .then(async () => {
+    // Player tracking is in-memory; after a panel restart ask the server who's on.
+    if (await serverManager.isRunning()) await consoleManager.executeCommand('list');
   })
   .catch((error) => {
     console.error('Error watching logs:', error);
   });
+
+// ── Crash watchdog ───────────────────────────────────────────────────────────
+// The server going offline without a stop from the panel means it crashed (or
+// was stopped from the in-game console) — tell Discord and connected clients.
+
+let wasRunning: boolean | null = null;
+const statusWatchTimer = setInterval(async () => {
+  try {
+    const running = await serverManager.isRunning();
+    if (wasRunning !== null && running !== wasRunning) {
+      if (!running) {
+        playerManager.clearAll();
+        io.emit('players:updated', { players: [] });
+        if (!serverManager.stoppedIntentionallyWithin(120_000)) {
+          void discordNotifier.onServerCrash('The server process exited without a stop from the panel.');
+          void auditLogger.log(null, 'server.crash');
+        }
+      }
+      io.emit('server:status:changed', { success: true, message: running ? 'Server online' : 'Server offline' });
+    }
+    wasRunning = running;
+  } catch (error) {
+    console.error('Status watch failed:', error);
+  }
+}, 10_000);
 
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
@@ -182,16 +227,13 @@ restartScheduler.init().catch((err) => {
   console.error('Failed to initialize restart scheduler:', err);
 });
 
-backupService.onBackupComplete = (info) => {
-  void discordNotifier.onBackupSuccess(info.filename, info.sizeBytes);
+// Failures of panel-triggered runs are already posted to Discord by the host job.
+backupService.onBackupComplete = (filename, sizeBytes) => {
+  void discordNotifier.onBackupSuccess(filename, sizeBytes);
 };
-backupService.onBackupFailed = (error) => {
-  void discordNotifier.onBackupFailed(error);
+backupService.onStatusChanged = (status) => {
+  io.emit('backups:updated', status);
 };
-
-backupService.init().catch((err) => {
-  console.error('Failed to initialize backup service:', err);
-});
 
 // ── HTTP server ──────────────────────────────────────────────────────────────
 
@@ -206,6 +248,8 @@ function shutdown(signal: string): void {
   if (metricsInterval) clearInterval(metricsInterval);
   consoleManager.stop();
   tpsTracker.stop();
+  jvmInspector.stop();
+  clearInterval(statusWatchTimer);
   portForwardChecker.cancelStartupCheck();
   restartScheduler.stop();
   backupService.stop();
