@@ -1,104 +1,45 @@
-import React from 'react';
 import { ServerStatus } from '../types/api';
 import { useServerControl } from '../hooks/useServerControl';
+import { Icon } from './icons/Icon';
 
 interface ControlButtonsProps {
   status: ServerStatus | null;
   loading?: boolean;
   onStatusChange?: () => void;
-  compact?: boolean;
 }
 
-export const ControlButtons: React.FC<ControlButtonsProps> = ({
-  status,
-  loading = false,
-  onStatusChange,
-  compact = false,
-}) => {
+export function ControlButtons({ status, loading = false, onStatusChange }: ControlButtonsProps) {
   const { buttonLoading, handleStart, handleStop, handleRestart } = useServerControl({ onStatusChange });
 
   const isTransitioning = status?.status === 'starting' || status?.status === 'stopping';
   const isOnline = status?.status === 'online';
   const isOffline = status?.status === 'offline';
+  const busy = loading || buttonLoading !== null || isTransitioning;
 
-  const rootClassName = compact ? 'control-buttons control-buttons--compact' : 'control-buttons';
-
-  if (loading) {
-    return (
-      <div className={rootClassName}>
-        <div className="control-buttons__placeholder">Loading...</div>
-      </div>
-    );
-  }
+  const confirmThen = (message: string, action: () => void) => () => {
+    if (window.confirm(message)) action();
+  };
 
   return (
-    <div className={rootClassName}>
-      <div className="control-buttons__group">
-        {isOffline && (
-          <button
-            className="btn btn--green control-buttons__button"
-            onClick={handleStart}
-            disabled={buttonLoading !== null || isTransitioning}
-            title={buttonLoading === 'start' ? 'Starting...' : 'Start the server'}
-          >
-            {buttonLoading === 'start' ? (
-              <>
-                <span className="control-buttons__spinner" />
-                Starting...
-              </>
-            ) : (
-              'Start Server'
-            )}
-          </button>
-        )}
-
-        {isOnline && (
-          <button
-            className="btn btn--red control-buttons__button"
-            onClick={handleStop}
-            disabled={buttonLoading !== null || isTransitioning}
-            title={buttonLoading === 'stop' ? 'Stopping...' : 'Stop the server'}
-          >
-            {buttonLoading === 'stop' ? (
-              <>
-                <span className="control-buttons__spinner" />
-                Stopping...
-              </>
-            ) : (
-              'Stop Server'
-            )}
-          </button>
-        )}
-
-        <button
-          className="btn btn--yellow control-buttons__button"
-          onClick={handleRestart}
-          disabled={buttonLoading !== null || isTransitioning || isOffline}
-          title={
-            isOffline
-              ? 'Server is offline'
-              : buttonLoading === 'restart'
-                ? 'Restarting...'
-                : 'Restart the server'
-          }
-        >
-          {buttonLoading === 'restart' ? (
-            <>
-              <span className="control-buttons__spinner" />
-              Restarting...
-            </>
-          ) : (
-            'Restart Server'
-          )}
+    <div className="control-buttons">
+      {isOffline && (
+        <button className="btn btn--green" onClick={handleStart} disabled={busy}>
+          {buttonLoading === 'start' ? <span className="spinner" /> : <Icon name="play" size={16} />}
+          {buttonLoading === 'start' ? 'Starting…' : 'Start'}
         </button>
-      </div>
-
-      {isTransitioning && !buttonLoading && (
-        <div className="control-buttons__status">
-          <span className="control-buttons__spinner-small" />
-          Server is {status?.status}...
-        </div>
+      )}
+      {!isOffline && (
+        <button className="btn btn--ghost" onClick={confirmThen('Restart the server? Players will be disconnected.', handleRestart)} disabled={busy || !isOnline}>
+          {buttonLoading === 'restart' ? <span className="spinner" /> : <Icon name="restart" size={16} />}
+          {buttonLoading === 'restart' ? 'Restarting…' : 'Restart'}
+        </button>
+      )}
+      {!isOffline && (
+        <button className="btn btn--danger" onClick={confirmThen('Stop the server? Players will be disconnected.', handleStop)} disabled={busy || !isOnline}>
+          {buttonLoading === 'stop' ? <span className="spinner" /> : <Icon name="stop" size={16} />}
+          {buttonLoading === 'stop' ? 'Stopping…' : 'Stop'}
+        </button>
       )}
     </div>
   );
-};
+}

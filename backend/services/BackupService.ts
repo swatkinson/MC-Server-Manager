@@ -1,370 +1,226 @@
 import * as fs from 'fs/promises';
-import * as path from 'path';
+import { createWriteStream } from 'fs';
 import * as os from 'os';
-import { execFile } from 'child_process';
+import * as path from 'path';
+import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
+import type { Writable } from 'stream';
+import type { BackupGatewayConfig, HostBackupStatus } from '../types/index.js';
 
 const execFileAsync = promisify(execFile);
 
-export interface BackupConfig {
-  backupDir: string;
-  schedule: {
-    enabled: boolean;
-    hour: number;
-    minute: number;
-  };
-  keepCount: number;
-}
+// Backups are owned by the Proxmox host's `mc-world-backup` job (world-only
+// archives on the host's backup SSD, nightly timer, keep-N retention). The
+// panel talks to it through a restricted SSH key whose authorized_keys entry
+// forces `/usr/local/sbin/mc-backup-gateway <server>`, which only allows:
+//   list | run | fetch <archive>
+// Nothing is stored on the VM except the short-lived download during a restore.
 
-export interface BackupInfo {
-  filename: string;
-  sizeBytes: number;
-  createdAt: number; // Unix ms (from file mtime)
-}
-
-export interface BackupResult {
-  success: boolean;
-  filename?: string;
-  sizeBytes?: number;
-  error?: string;
-}
-
-function formatTimestamp(): string {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
-}
-
-function computeNext(hour: number, minute: number): Date {
-  const now = new Date();
-  const candidate = new Date();
-  candidate.setHours(hour, minute, 0, 0);
-  if (candidate.getTime() <= now.getTime()) {
-    candidate.setDate(candidate.getDate() + 1);
-  }
-  return candidate;
-}
-
-const FILENAME_PATTERN = /^mc-backup-[\d_-]+\.tar\.gz$/;
+const ARCHIVE_PATTERN = /^[a-z0-9_-]+-world-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}\.tar\.gz$/;
+const RUN_POLL_MS = 5_000;
+const RUN_TIMEOUT_MS = 20 * 60_000;
+// Previous worlds moved aside by a restore; older ones are deleted.
+const KEEP_PRE_RESTORE = 2;
 
 export class BackupService {
-  private config: BackupConfig | null = null;
-  private backupTimer: NodeJS.Timeout | null = null;
+  private config: BackupGatewayConfig | null = null;
+  private watchTimer: NodeJS.Timeout | null = null;
+  private restoring = false;
 
-  onBackupComplete: ((info: BackupInfo) => void) | null = null;
-  onBackupFailed: ((error: string) => void) | null = null;
+  onStatusChanged: ((status: HostBackupStatus) => void) | null = null;
+  onBackupComplete: ((filename: string, sizeBytes: number) => void) | null = null;
 
   constructor(
     private readonly configPath: string,
-    private readonly minecraftDir: string,
-    private readonly defaultBackupDir: string,
+    private readonly defaults: BackupGatewayConfig,
   ) {}
 
-  async init(): Promise<void> {
-    await this.loadConfig();
-
-    const cfg = this.config!;
-    if (!cfg.schedule.enabled) return;
-
-    const next = computeNext(cfg.schedule.hour, cfg.schedule.minute);
-    this.armTimer(next.getTime() - Date.now());
-  }
-
   stop(): void {
-    this.clearTimer();
+    if (this.watchTimer) clearTimeout(this.watchTimer);
+    this.watchTimer = null;
   }
 
-  async getConfig(): Promise<BackupConfig> {
-    await this.loadConfig();
-    return { ...this.config! };
-  }
-
-  async setConfig(partial: Partial<BackupConfig>): Promise<void> {
-    await this.loadConfig();
-    const current = this.config!;
-
-    const merged: BackupConfig = {
-      backupDir: partial.backupDir ?? current.backupDir,
-      schedule: partial.schedule
-        ? {
-            enabled: partial.schedule.enabled ?? current.schedule.enabled,
-            hour: Math.min(23, Math.max(0, Math.round(partial.schedule.hour ?? current.schedule.hour))),
-            minute: Math.min(59, Math.max(0, Math.round(partial.schedule.minute ?? current.schedule.minute))),
-          }
-        : current.schedule,
-      keepCount: Math.max(1, Math.round(partial.keepCount ?? current.keepCount)),
-    };
-
-    this.config = merged;
-    await this.persist();
-
-    this.clearTimer();
-    if (merged.schedule.enabled) {
-      const next = computeNext(merged.schedule.hour, merged.schedule.minute);
-      this.armTimer(next.getTime() - Date.now());
-    }
-  }
-
-  async createBackup(): Promise<BackupResult> {
+  async getConfig(): Promise<BackupGatewayConfig> {
+    if (this.config) return this.config;
     try {
-      const cfg = await this.getConfig();
-      const backupsDir = path.join(cfg.backupDir, 'mc-backups');
-      await fs.mkdir(backupsDir, { recursive: true });
-
-      const timestamp = formatTimestamp();
-      const filename = `mc-backup-${timestamp}.tar.gz`;
-      const outputPath = path.join(backupsDir, filename);
-
-      const parentOfMinecraftDir = path.dirname(this.minecraftDir);
-      const minecraftDirName = path.basename(this.minecraftDir);
-
-      // Exclude the backups dir from the archive when it lives inside minecraftDir,
-      // otherwise each backup would embed all previous backups.
-      const tarArgs = ['-czf', outputPath];
-      const relBackupsDir = path.relative(this.minecraftDir, backupsDir);
-      if (!relBackupsDir.startsWith('..') && !path.isAbsolute(relBackupsDir)) {
-        tarArgs.push('--exclude', path.join(minecraftDirName, relBackupsDir));
-      }
-      tarArgs.push('-C', parentOfMinecraftDir, minecraftDirName);
-
-      await execFileAsync('tar', tarArgs);
-
-      const stat = await fs.stat(outputPath);
-      const sizeBytes = stat.size;
-      const createdAt = stat.mtimeMs;
-
-      await this.enforceKeepCount(backupsDir, cfg.keepCount);
-
-      const info: BackupInfo = { filename, sizeBytes, createdAt };
-      this.onBackupComplete?.(info);
-
-      return { success: true, filename, sizeBytes };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.onBackupFailed?.(message);
-      return { success: false, error: message };
-    }
-  }
-
-  async listBackups(): Promise<BackupInfo[]> {
-    try {
-      const cfg = await this.getConfig();
-      const backupsDir = path.join(cfg.backupDir, 'mc-backups');
-
-      let entries: string[];
-      try {
-        entries = await fs.readdir(backupsDir);
-      } catch {
-        return [];
-      }
-
-      const tarFiles = entries.filter((f) => f.endsWith('.tar.gz'));
-
-      const infos = await Promise.all(
-        tarFiles.map(async (filename): Promise<BackupInfo | null> => {
-          try {
-            const stat = await fs.stat(path.join(backupsDir, filename));
-            return { filename, sizeBytes: stat.size, createdAt: stat.mtimeMs };
-          } catch {
-            return null;
-          }
-        }),
-      );
-
-      return infos
-        .filter((i): i is BackupInfo => i !== null)
-        .sort((a, b) => b.createdAt - a.createdAt);
-    } catch {
-      return [];
-    }
-  }
-
-  async restoreBackup(filename: string): Promise<{ success: boolean; error?: string }> {
-    if (!FILENAME_PATTERN.test(filename)) {
-      return { success: false, error: 'Invalid backup filename' };
-    }
-
-    try {
-      const cfg = await this.getConfig();
-      const backupsDir = path.join(cfg.backupDir, 'mc-backups');
-      const backupFile = path.join(backupsDir, filename);
-
-      try {
-        await fs.access(backupFile);
-      } catch {
-        return { success: false, error: 'Backup file not found' };
-      }
-
-      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-restore-'));
-
-      try {
-        await execFileAsync('tar', ['-xzf', backupFile, '-C', tempDir]);
-
-        const minecraftDirName = path.basename(this.minecraftDir);
-        const extractedDir = path.join(tempDir, minecraftDirName);
-
-        try {
-          await execFileAsync('rsync', [
-            '-a',
-            '--exclude=mc-server-manager/',
-            `${extractedDir}/`,
-            `${this.minecraftDir}/`,
-          ]);
-        } catch (rsyncErr) {
-          const isEnoent =
-            rsyncErr instanceof Error && 'code' in rsyncErr && (rsyncErr as NodeJS.ErrnoException).code === 'ENOENT';
-          if (!isEnoent) throw rsyncErr;
-
-          // rsync not available — manual copy fallback
-          await this.manualCopy(extractedDir, this.minecraftDir);
-        }
-      } finally {
-        await fs.rm(tempDir, { recursive: true, force: true });
-      }
-
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) };
-    }
-  }
-
-  async deleteBackup(filename: string): Promise<{ success: boolean; error?: string }> {
-    if (!FILENAME_PATTERN.test(filename)) {
-      return { success: false, error: 'Invalid backup filename' };
-    }
-
-    try {
-      const cfg = await this.getConfig();
-      const backupsDir = path.join(cfg.backupDir, 'mc-backups');
-      await fs.unlink(path.join(backupsDir, filename));
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) };
-    }
-  }
-
-  // --- Private helpers ---
-
-  private async loadConfig(): Promise<void> {
-    if (this.config !== null) return;
-
-    const defaultConfig: BackupConfig = {
-      backupDir: this.defaultBackupDir,
-      schedule: { enabled: false, hour: 3, minute: 0 },
-      keepCount: 7,
-    };
-
-    try {
-      const raw = await fs.readFile(this.configPath, 'utf-8');
-      const parsed = JSON.parse(raw) as Partial<BackupConfig>;
+      const parsed = JSON.parse(await fs.readFile(this.configPath, 'utf-8')) as Partial<BackupGatewayConfig>;
       this.config = {
-        backupDir: typeof parsed.backupDir === 'string' ? parsed.backupDir : defaultConfig.backupDir,
-        schedule:
-          parsed.schedule &&
-          typeof parsed.schedule.enabled === 'boolean' &&
-          typeof parsed.schedule.hour === 'number' &&
-          typeof parsed.schedule.minute === 'number'
-            ? {
-                enabled: parsed.schedule.enabled,
-                hour: parsed.schedule.hour,
-                minute: parsed.schedule.minute,
-              }
-            : defaultConfig.schedule,
-        keepCount: typeof parsed.keepCount === 'number' ? parsed.keepCount : defaultConfig.keepCount,
+        host: typeof parsed.host === 'string' ? parsed.host : this.defaults.host,
+        keyPath: typeof parsed.keyPath === 'string' ? parsed.keyPath : this.defaults.keyPath,
       };
     } catch {
-      this.config = defaultConfig;
+      this.config = { ...this.defaults };
     }
+    return this.config;
   }
 
-  private async persist(): Promise<void> {
-    const dir = path.dirname(this.configPath);
-    await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(this.configPath, JSON.stringify(this.config, null, 2), 'utf-8');
-  }
-
-  private async enforceKeepCount(backupsDir: string, keepCount: number): Promise<void> {
-    const backups = await this.listBackupsInDir(backupsDir);
-    if (backups.length <= keepCount) return;
-
-    // listBackupsInDir returns newest-first; delete from the end (oldest)
-    const toDelete = backups.slice(keepCount);
-    for (const info of toDelete) {
-      try {
-        await fs.unlink(path.join(backupsDir, info.filename));
-      } catch {
-        // best-effort
-      }
+  async setConfig(partial: Partial<BackupGatewayConfig>): Promise<BackupGatewayConfig> {
+    const current = await this.getConfig();
+    const next: BackupGatewayConfig = {
+      host: typeof partial.host === 'string' ? partial.host.trim() : current.host,
+      keyPath: typeof partial.keyPath === 'string' ? partial.keyPath.trim() : current.keyPath,
+    };
+    if (next.host && !/^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$/.test(next.host)) {
+      throw new Error('Host must look like user@hostname');
     }
+    await fs.mkdir(path.dirname(this.configPath), { recursive: true });
+    await fs.writeFile(this.configPath, JSON.stringify(next, null, 2), 'utf-8');
+    this.config = next;
+    return next;
   }
 
-  private async listBackupsInDir(backupsDir: string): Promise<BackupInfo[]> {
-    let entries: string[];
+  async getStatus(): Promise<HostBackupStatus> {
+    const cfg = await this.getConfig();
+    if (!cfg.host) return emptyStatus(cfg, 'Backup host is not configured.');
     try {
-      entries = await fs.readdir(backupsDir);
-    } catch {
-      return [];
+      const { stdout } = await execFileAsync('ssh', [...this.sshArgs(cfg), 'list'], { timeout: 15_000, maxBuffer: 4 * 1024 * 1024 });
+      const parsed = JSON.parse(stdout) as Omit<HostBackupStatus, 'configured' | 'reachable' | 'error' | 'host' | 'restoring'>;
+      return { ...parsed, configured: true, reachable: true, error: null, host: cfg.host, restoring: this.restoring };
+    } catch (error) {
+      return { ...emptyStatus(cfg, describeSshError(error)), configured: true };
     }
-
-    const tarFiles = entries.filter((f) => f.endsWith('.tar.gz'));
-
-    const infos = await Promise.all(
-      tarFiles.map(async (filename): Promise<BackupInfo | null> => {
-        try {
-          const stat = await fs.stat(path.join(backupsDir, filename));
-          return { filename, sizeBytes: stat.size, createdAt: stat.mtimeMs };
-        } catch {
-          return null;
-        }
-      }),
-    );
-
-    return infos
-      .filter((i): i is BackupInfo => i !== null)
-      .sort((a, b) => b.createdAt - a.createdAt);
   }
 
-  private async manualCopy(srcDir: string, destDir: string): Promise<void> {
-    const entries = await fs.readdir(srcDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.name === 'mc-server-manager') continue;
-      const srcPath = path.join(srcDir, entry.name);
-      const destPath = path.join(destDir, entry.name);
-      if (entry.isDirectory()) {
-        await fs.mkdir(destPath, { recursive: true });
-        await this.manualCopy(srcPath, destPath);
-      } else {
-        await fs.copyFile(srcPath, destPath);
+  async runBackup(): Promise<{ success: boolean; error?: string }> {
+    const cfg = await this.getConfig();
+    if (!cfg.host) return { success: false, error: 'Backup host is not configured' };
+    try {
+      const requestedAt = Date.now();
+      const { stdout } = await execFileAsync('ssh', [...this.sshArgs(cfg), 'run'], { timeout: 20_000 });
+      const result = JSON.parse(stdout) as { started: boolean; reason?: string };
+      if (!result.started) return { success: false, error: result.reason ?? 'Host refused to start a backup' };
+      this.watchRun(requestedAt);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: describeSshError(error) };
+    }
+  }
+
+  // Streams an archive from the host straight into `out` (an HTTP response).
+  async streamArchive(filename: string, out: Writable): Promise<void> {
+    if (!ARCHIVE_PATTERN.test(filename)) throw new Error('Invalid backup filename');
+    const cfg = await this.getConfig();
+    const child = spawn('ssh', [...this.sshArgs(cfg), 'fetch', filename], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stderr = '';
+    child.stderr.on('data', (d: Buffer) => (stderr += d.toString()));
+    child.stdout.pipe(out);
+    // Client gave up mid-download — stop pulling from the host.
+    out.on('close', () => child.kill());
+    const exited = new Promise<void>((resolve, reject) => {
+      child.on('error', reject);
+      child.on('close', (code) => (code === 0 ? resolve() : reject(new Error(stderr.trim() || `fetch exited with ${code}`))));
+    });
+    // Resolve only once the destination has flushed everything (matters for files).
+    const flushed = new Promise<void>((resolve, reject) => {
+      out.on('finish', resolve);
+      out.on('error', reject);
+    });
+    await Promise.all([exited, flushed]);
+  }
+
+  // Replaces the world directory with the one from `filename`. The server must
+  // be stopped: restoring under a live server gets overwritten on next save.
+  // The current world is kept as `<world>.pre-restore-<timestamp>`.
+  async restore(filename: string, worldPath: string, serverRunning: boolean): Promise<{ success: boolean; error?: string; keptAs?: string }> {
+    if (!ARCHIVE_PATTERN.test(filename)) return { success: false, error: 'Invalid backup filename' };
+    if (serverRunning) return { success: false, error: 'Stop the server before restoring a backup' };
+    if (this.restoring) return { success: false, error: 'A restore is already in progress' };
+
+    this.restoring = true;
+    const parent = path.dirname(worldPath);
+    const worldName = path.basename(worldPath);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    // Staged next to the world so the final swap is a same-filesystem rename.
+    const staging = await fs.mkdtemp(path.join(parent, '.restore-'));
+    const archivePath = path.join(staging, filename);
+    try {
+      await this.streamArchive(filename, createWriteStream(archivePath));
+
+      const { stdout: listing } = await execFileAsync('tar', ['-tzf', archivePath], { maxBuffer: 256 * 1024 * 1024 });
+      const roots = new Set(listing.split('\n').filter(Boolean).map((p) => p.replace(/^\.\//, '').split('/')[0]));
+      if (roots.size !== 1) return { success: false, error: 'Archive does not contain a single world folder' };
+      const [root] = [...roots];
+
+      await execFileAsync('tar', ['-xzf', archivePath, '-C', staging]);
+      const extracted = path.join(staging, root);
+      await fs.access(path.join(extracted, 'level.dat'));
+
+      const keptAs = `${worldName}.pre-restore-${stamp}`;
+      try {
+        await fs.rename(worldPath, path.join(parent, keptAs));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       }
+      await fs.rename(extracted, worldPath);
+      await this.prunePreRestore(parent, worldName);
+      return { success: true, keptAs };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    } finally {
+      await fs.rm(staging, { recursive: true, force: true });
+      this.restoring = false;
     }
   }
 
-  private armTimer(msUntilBackup: number): void {
-    this.backupTimer = setTimeout(() => {
-      void this.executeScheduledBackup();
-    }, Math.max(0, msUntilBackup));
-  }
-
-  private async executeScheduledBackup(): Promise<void> {
-    await this.createBackup();
-    await this.scheduleNext();
-  }
-
-  private async scheduleNext(): Promise<void> {
-    // Reload config in case it changed
-    this.config = null;
-    await this.loadConfig();
-    const cfg = this.config!;
-    if (!cfg.schedule.enabled) return;
-
-    const next = computeNext(cfg.schedule.hour, cfg.schedule.minute);
-    this.armTimer(next.getTime() - Date.now());
-  }
-
-  private clearTimer(): void {
-    if (this.backupTimer) {
-      clearTimeout(this.backupTimer);
-      this.backupTimer = null;
+  private async prunePreRestore(parent: string, worldName: string): Promise<void> {
+    const prefix = `${worldName}.pre-restore-`;
+    const old = (await fs.readdir(parent)).filter((n) => n.startsWith(prefix)).sort().reverse();
+    for (const name of old.slice(KEEP_PRE_RESTORE)) {
+      await fs.rm(path.join(parent, name), { recursive: true, force: true });
     }
   }
+
+  // Polls the host after a manual run until it reports a finished run that
+  // started after our request, pushing status updates along the way.
+  private watchRun(requestedAt: number): void {
+    this.stop();
+    const deadline = Date.now() + RUN_TIMEOUT_MS;
+    const tick = async () => {
+      const status = await this.getStatus();
+      this.onStatusChanged?.(status);
+      const run = status.lastRun;
+      const finished = run && run.startedAt * 1000 >= requestedAt - 60_000 && run.state !== 'running' && !status.running;
+      if (finished) {
+        if (run.state === 'ok' && status.archives[0]) {
+          this.onBackupComplete?.(status.archives[0].filename, status.archives[0].sizeBytes);
+        }
+        return;
+      }
+      if (Date.now() < deadline) this.watchTimer = setTimeout(() => void tick(), RUN_POLL_MS);
+    };
+    this.watchTimer = setTimeout(() => void tick(), RUN_POLL_MS);
+  }
+
+  private sshArgs(cfg: BackupGatewayConfig): string[] {
+    return [
+      '-i', cfg.keyPath.replace(/^~(?=\/)/, os.homedir()),
+      '-o', 'BatchMode=yes',
+      '-o', 'ConnectTimeout=8',
+      '-o', 'StrictHostKeyChecking=accept-new',
+      cfg.host,
+    ];
+  }
+}
+
+function emptyStatus(cfg: BackupGatewayConfig, error: string): HostBackupStatus {
+  return {
+    configured: Boolean(cfg.host),
+    reachable: false,
+    error,
+    host: cfg.host,
+    server: '',
+    keep: 0,
+    archives: [],
+    lastRun: null,
+    running: false,
+    restoring: false,
+    schedule: { nextRunAt: null, lastRunAt: null },
+    disk: null,
+  };
+}
+
+function describeSshError(error: unknown): string {
+  const stderr = (error as { stderr?: string }).stderr?.trim();
+  if (stderr) return stderr.split('\n').pop() ?? stderr;
+  return error instanceof Error ? error.message : String(error);
 }

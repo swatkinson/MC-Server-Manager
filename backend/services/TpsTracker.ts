@@ -22,6 +22,17 @@ function stripSparkPrefix(text: string): string {
   return text.replace(/\[?⚡\]?/g, '').replace(/^\s+/, '');
 }
 
+// Stateless check for lines our probes produce. Used to clean console history
+// read back from latest.log, where the live poll-window context is gone.
+export function isProbeNoise(message: string): boolean {
+  const m = stripColors(message);
+  if (m.includes('⚡')) return true;
+  if (/Mean TPS:/i.test(m)) return true;
+  if (/TPS from last [^:]+:/i.test(m) || /tick times\s*\(avg\/max\)/i.test(m)) return true;
+  if (/<--\[HERE\]/.test(m) && /\b(tps|mspt|forge|spark)\b/i.test(m)) return true;
+  return /Unknown or incomplete command/i.test(m) || (/Unknown command/i.test(m) && /(tps|mspt|forge|spark)/i.test(m));
+}
+
 export class TpsTracker {
   private tps: number | null = null;
   private mspt: number | null = null;
@@ -48,9 +59,9 @@ export class TpsTracker {
     if (!this.serverTypeProvider) return ['tps', 'mspt', 'forge tps'];
     const type = await this.serverTypeProvider();
     switch (type) {
-      // spark tps is tried alongside forge tps; if Spark isn't installed the
-      // "Unknown command" echo is suppressed within the poll window.
-      case 'forge': return ['forge tps', 'spark tps'];
+      // `forge tps` alone — `spark tps` printed ~12 extra lines into latest.log
+      // every poll. Spark output is still parsed if someone runs it by hand.
+      case 'forge': return ['forge tps'];
       case 'vanilla': return [];
       case 'paper':
       case 'purpur':

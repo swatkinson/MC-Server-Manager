@@ -12,6 +12,9 @@ WorkingDirectory=/home/<your-username>/mc-server-manager
 ExecStart=/usr/bin/node /home/<your-username>/mc-server-manager/dist/backend/server.js
 Restart=always
 RestartSec=5s
+# Only stop the Node process on restart/deploy. The default (control-group)
+# would also kill a Minecraft server the panel launched via start.sh/screen.
+KillMode=process
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=mc-server-manager

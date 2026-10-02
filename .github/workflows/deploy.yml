@@ -25,17 +25,24 @@ jobs:
       - name: Build frontend and backend
         run: npm run build:prod
 
+      # Plain cp (rsync isn't installed on the VM). Copy to a temp dir and swap
+      # so the old panel never serves a half-copied dist/.
       - name: Deploy to server
         run: |
           mkdir -p ~/mc-server-manager
-          rsync -av --delete dist/ ~/mc-server-manager/dist/
-          rsync -av --delete package.json package-lock.json mc-server-manager.service ~/mc-server-manager/
+          rm -rf ~/mc-server-manager/dist.new
+          cp -r dist ~/mc-server-manager/dist.new
+          rm -rf ~/mc-server-manager/dist
+          mv ~/mc-server-manager/dist.new ~/mc-server-manager/dist
+          cp package.json package-lock.json mc-server-manager.service ~/mc-server-manager/
 
       - name: Install production dependencies
         run: |
           cd ~/mc-server-manager
           npm ci --omit=dev
 
+      # Restarts only the panel. Minecraft runs in its own screen session; the
+      # unit's KillMode=process keeps it alive even when the panel launched it.
       - name: Restart service
         run: |
           sudo systemctl restart mc-server-manager

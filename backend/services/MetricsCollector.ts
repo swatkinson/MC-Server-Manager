@@ -1,9 +1,9 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs/promises';
-import { JvmHeap, SystemMetrics, TpsMetrics } from '../types/index.js';
+import { SystemMetrics, TpsMetrics } from '../types/index.js';
 import { config } from '../config.js';
-import { findJavaPid } from './processUtils.js';
+import type { JvmInspector } from './JvmInspector.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -30,6 +30,8 @@ type TpsProvider = () => TpsMetrics | null;
 
 export class MetricsCollector {
   private tpsProvider: TpsProvider | null = null;
+
+  constructor(private readonly jvmInspector: JvmInspector | null = null) {}
 
   setTpsProvider(provider: TpsProvider): void {
     this.tpsProvider = provider;
@@ -99,10 +101,9 @@ export class MetricsCollector {
       const total = totalKb * 1024;
       const used = Math.max(0, (totalKb - availableKb) * 1024);
 
-      const jvm = await this.getJvmHeap();
-      const systemOther = jvm
-        ? Math.max(0, used - jvm.heapUsed)
-        : used;
+      const jvm = this.jvmInspector?.getLatest() ?? null;
+      // Everything the OS has handed out that isn't the Minecraft process.
+      const systemOther = jvm?.rss != null ? Math.max(0, used - jvm.rss) : used;
 
       return {
         total,
@@ -114,36 +115,6 @@ export class MetricsCollector {
     } catch (error) {
       console.error('Error getting RAM metrics:', error);
       return EMPTY_RAM;
-    }
-  }
-
-  private async getJvmHeap(): Promise<JvmHeap | null> {
-    const pid = await findJavaPid();
-    if (!pid) return null;
-    try {
-      const [heapStats, heapMax] = await Promise.all([
-        readHeapStats(pid),
-        readMaxHeapFromCmdline(pid),
-      ]);
-      if (heapStats && heapMax) {
-        return {
-          heapUsed: heapStats.used,
-          heapCommitted: heapStats.committed,
-          heapMax,
-        };
-      }
-      // jstat unavailable (not installed, wrong user, transitional JVM state).
-      // Fall back to process RSS — world-readable from /proc regardless of owner.
-      const rssBytes = await readProcessRss(pid);
-      if (rssBytes === null) return null;
-      return {
-        heapUsed: rssBytes,
-        heapCommitted: rssBytes,
-        heapMax: heapMax,
-        approximate: true,
-      };
-    } catch {
-      return null;
     }
   }
 
@@ -176,70 +147,4 @@ function clamp(value: number): number {
 function parseMeminfo(content: string, key: string): number {
   const match = content.match(new RegExp(`^${key}:\\s+(\\d+)\\s+kB`, 'm'));
   return match ? parseInt(match[1], 10) : 0;
-}
-
-// jstat reads JVM heap counters from the hsperfdata memory-mapped file —
-// no Attach API, no signals to the JVM. Output (columns in KB):
-//   S0C S1C S0U S1U EC EU OC OU MC MU CCSC CCSU YGC YGCT FGC FGCT CGC CGCT GCT
-// Heap used = S0U + S1U + EU + OU; committed = S0C + S1C + EC + OC.
-async function readHeapStats(pid: number): Promise<{ used: number; committed: number } | null> {
-  try {
-    const { stdout } = await execFileAsync('jstat', ['-gc', String(pid)], { timeout: 3_000 });
-    const lines = stdout.trim().split('\n');
-    if (lines.length < 2) return null;
-    const headers = lines[0].trim().split(/\s+/);
-    const values = lines[1].trim().split(/\s+/);
-    const at = (key: string): number => {
-      const i = headers.indexOf(key);
-      if (i < 0) return 0;
-      const parsed = parseFloat(values[i] ?? '');
-      return Number.isFinite(parsed) ? parsed : 0;
-    };
-    const usedKb = at('S0U') + at('S1U') + at('EU') + at('OU');
-    const committedKb = at('S0C') + at('S1C') + at('EC') + at('OC');
-    if (committedKb <= 0) return null;
-    return { used: usedKb * 1024, committed: committedKb * 1024 };
-  } catch {
-    return null;
-  }
-}
-
-// /proc/<pid>/status is world-readable (no ownership restriction) — VmRSS is
-// the physical RAM the process currently occupies, used as a jstat fallback.
-async function readProcessRss(pid: number): Promise<number | null> {
-  try {
-    const content = await fs.readFile(`/proc/${pid}/status`, 'utf-8');
-    const match = content.match(/^VmRSS:\s+(\d+)\s+kB/m);
-    return match ? parseInt(match[1], 10) * 1024 : null;
-  } catch {
-    return null;
-  }
-}
-
-// /proc/<pid>/cmdline is null-separated. We scan it for an -Xmx flag and
-// convert k/m/g suffixes to bytes. The JVM accepts e.g. -Xmx8G, -Xmx8192m,
-// -Xmx8589934592.
-async function readMaxHeapFromCmdline(pid: number): Promise<number | null> {
-  try {
-    const data = await fs.readFile(`/proc/${pid}/cmdline`, 'utf-8');
-    for (const arg of data.split('\0')) {
-      const match = arg.match(/^-Xmx(\d+)([kKmMgG]?)$/);
-      if (!match) continue;
-      const value = parseInt(match[1], 10);
-      if (!Number.isFinite(value) || value <= 0) return null;
-      switch (match[2].toLowerCase()) {
-        case 'g':
-          return value * 1024 * 1024 * 1024;
-        case 'm':
-          return value * 1024 * 1024;
-        case 'k':
-          return value * 1024;
-        default:
-          return value;
-      }
-    }
-    return null;
-  } catch {
-    return null;
-  }
 }

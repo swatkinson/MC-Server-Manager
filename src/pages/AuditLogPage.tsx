@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
 import { useAuth } from '../context/AuthContext';
 import { useAuditLog } from '../hooks/useAuditLog';
 
@@ -13,7 +12,6 @@ function formatDetails(details: Record<string, unknown>): string {
 
 export function AuditLogPage() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [page, setPage] = useState(0);
 
   const { entries, total, loading, error, refetch } = useAuditLog(PAGE_SIZE, page);
@@ -25,27 +23,21 @@ export function AuditLogPage() {
   if (user?.role !== 'admin') {
     return (
       <div className="accounts-page">
-        <div className="accounts-page__header">
-          <h1 className="accounts-page__title">Audit Log</h1>
-          <button className="btn btn--gray" onClick={() => void navigate({ to: '/' })}>
-            ← Back to Dashboard
-          </button>
-        </div>
-        <p style={{ color: 'var(--red)' }}>Access denied.</p>
+        <div className="banner banner--bad">Access denied.</div>
       </div>
     );
   }
 
   return (
     <div className="accounts-page">
-      <div className="accounts-page__header">
-        <h1 className="accounts-page__title">Audit Log</h1>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn btn--gray" onClick={refetch}>
+      <div className="page__header">
+        <div>
+          <h2 className="page__title">Audit log</h2>
+          <p className="page__subtitle">Every sign-in and change made through the panel.</p>
+        </div>
+        <div className="page__actions">
+          <button className="btn btn--ghost" onClick={refetch}>
             Refresh
-          </button>
-          <button className="btn btn--gray" onClick={() => void navigate({ to: '/' })}>
-            ← Back to Dashboard
           </button>
         </div>
       </div>

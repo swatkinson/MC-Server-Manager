@@ -57,17 +57,16 @@ export function ConsoleInput({
     <div className="console-input">
       <form className="console-input__form" onSubmit={handleSubmit}>
         <div className="console-input__input-wrapper">
-          <span className="console-input__prompt">{'>'}</span>
+          <span className="console-input__prompt">{'›'}</span>
           <input
             ref={inputRef}
             type="text"
             className="console-input__field"
-            placeholder="Enter command..."
+            placeholder="Type a command (↑↓ history)"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={loading}
-            autoFocus
           />
         </div>
 
@@ -79,10 +78,10 @@ export function ConsoleInput({
           {loading ? (
             <>
               <span className="console-input__spinner" />
-              Executing...
+              Sending…
             </>
           ) : (
-            'Submit'
+            'Send'
           )}
         </button>
       </form>
@@ -93,9 +92,6 @@ export function ConsoleInput({
         </div>
       )}
 
-      <div className="console-input__hints">
-        <span>Use ↑↓ for command history</span>
-      </div>
     </div>
   );
 }

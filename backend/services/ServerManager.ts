@@ -17,6 +17,7 @@ function escapeRegex(value: string): string {
 
 export class ServerManager {
   private isTransitioning = false;
+  private lastIntentionalStopMs = 0;
 
   constructor(private readonly infoStore: ServerInfoStore) {}
 
@@ -97,6 +98,7 @@ export class ServerManager {
         return { success: false, message: 'Server is not running' };
       }
 
+      this.lastIntentionalStopMs = Date.now();
       await this.sendConsoleCommand('say Server is shutting down...');
       await new Promise((resolve) => setTimeout(resolve, 2000));
       await this.sendConsoleCommand('stop');
@@ -129,6 +131,15 @@ export class ServerManager {
     } catch (error) {
       console.error('Error sending console command:', error);
     }
+  }
+
+  // `/stop` typed into the console (panel or in-game) is a deliberate stop too.
+  markIntentionalStop(): void {
+    this.lastIntentionalStopMs = Date.now();
+  }
+
+  stoppedIntentionallyWithin(ms: number): boolean {
+    return Date.now() - this.lastIntentionalStopMs < ms;
   }
 
   async isRunning(): Promise<boolean> {

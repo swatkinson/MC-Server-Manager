@@ -25,7 +25,7 @@ MC Server Manager is a single Node.js process (Express + Socket.IO) running on t
 The app controls Minecraft by shelling out:
 - **Start:** `bash start.sh` in `MINECRAFT_DIR`
 - **Commands:** `screen -S minecraft -X stuff '<cmd>\n'`
-- **Status:** `pgrep -x java`
+- **Status:** `pgrep -x java` (+ a 10 s watchdog in `server.ts` that reports crashes to Discord)
 - **Stop:** graceful via `stop` command; force-stop via `pkill -f java.*\.jar`
 - **Console:** poll `logs/latest.log` every 1 s (inode-aware for log rotation)
 
@@ -36,16 +36,18 @@ All env-driven configuration lives in `backend/config.ts` (`MINECRAFT_DIR`, `MC_
 | Service | Responsibility |
 |---|---|
 | `ServerManager` | start/stop/restart, status, uptime, version |
-| `ConsoleManager` | log polling, command execution, player join/leave detection |
-| `MetricsCollector` | CPU (`/proc/stat`), RAM (`/proc/meminfo`), JVM heap (`jstat`), storage (`df`), TPS |
-| `TpsTracker` | Polls `forge tps` + `spark tps` (Forge), `tps`/`mspt` (Paper) every 10 s; parses Spark's two-line output; suppresses probe output from console |
-| `PlayerManager` | In-memory online player map; reads `ops.json` (60 s TTL cache) |
+| `ConsoleManager` | log polling, in-memory console history (seeded from latest.log minus probe noise), command execution, player join/leave/`list` detection |
+| `MetricsCollector` | CPU (`/proc/stat`), RAM (`/proc/meminfo`), storage (`df`), TPS; JVM memory from `JvmInspector` |
+| `JvmInspector` | Samples the Minecraft JVM's hsperfdata file every 5 s (`hsperfdata.ts` parser): live heap (old+survivor), heap in use, committed, max (`-Xmx` from vmArgs), RSS, GC pause %, full GCs, pressure verdict; keeps 1 h history |
+| `TpsTracker` | Polls `forge tps` (Forge), `tps`/`mspt` (Paper) every 10 s; still parses Spark output; suppresses probe output from console; `isProbeNoise()` cleans history |
+| `PlayerManager` | In-memory online player map; `ops.json` + `usercache.json` (UUIDs), 60 s TTL caches |
 | `ConfigManager` | Read/write `server.properties` and `whitelist.json` |
-| `PreflightChecker` | Validates paths and required binaries on startup (`java`, `screen`, `pgrep`, `pkill`, `jstat`) |
+| `PreflightChecker` | Validates paths and required binaries on startup (`java`, `screen`, `pgrep`, `pkill`) and that the JVM perf counters are readable |
 | `PortForwardChecker` | Checks external reachability 30 s after server start via `api.ipify.org` + `mcsrvstat.us` |
 | `AuditLogger` | Appends structured JSON entries to an audit log file; supports paginated retrieval |
 | `DiscordNotifier` | Sends Discord webhook embeds for server start/stop/crash, scheduled restarts, and backup events; config persisted to JSON |
-| `BackupService` | Creates/lists/deletes/restores `tar.gz` world backups; enforces a keep-count retention policy; supports optional scheduled daily backups |
+| `BackupService` | Client for the Proxmox host's `mc-backup-gateway` over SSH (list / run / fetch); restores by swapping the world dir (server must be stopped) |
+| `ModConfigService` | Lists/reads/writes text configs under `config/`, `world/serverconfig/`, `defaultconfigs/`; realpath containment, mtime conflict check, last 10 versions per file in `mc-server-manager/config-history/` |
 | `RestartScheduler` | Schedules automatic daily server restarts at a configured hour/minute; sends in-game 5-min and 1-min warnings; persists schedule to JSON |
 | `UserStore` | Persists user accounts (id, username, passwordHash, role) to `users.json`; CRUD operations for admin/moderator/user accounts |
 | `AuthService` | JWT-based authentication (bcrypt password hashing, 8-hour tokens); issues and validates `mc_auth` session cookies |
@@ -56,7 +58,7 @@ All env-driven configuration lives in `backend/config.ts` (`MINECRAFT_DIR`, `MC_
 
 ### Frontend
 
-Two pages: `src/pages/Dashboard.tsx` (main view) and `src/pages/AccountsPage.tsx` (admin only). TanStack Router is set up in `src/main.tsx`. `ToastContext` and `AuthContext` are the React contexts.
+Signed-in pages render inside `AppShell` (pathless layout route in `src/main.tsx`: sidebar + top bar with server controls): `Dashboard` (overview), `ModConfigsPage`, `BackupsPage`, `SettingsPage` (tiles opening the existing editor modals), `AccountsPage` and `AuditLogPage` (admin). Contexts: `ToastContext`, `AuthContext`, `ServerDataContext` (single status poll + metrics subscription shared by the shell and pages).
 
 **Role-based access:** Three roles — `admin` (full access), `moderator` (no Manage Accounts), `user` (read-only: metrics, player count, console). `requireRole()` middleware in `backend/middleware/requireAuth.ts` gates routes. Frontend conditionally renders `ControlButtons`, `ConfigPanel`, and `ConsoleInput` based on `user.role` from `useAuth()`.
 
@@ -73,7 +75,7 @@ API utilities are in `src/hooks/useApi.ts`: `useApi` for GET with auto-polling, 
 
 ### Socket.IO Events (server → client)
 
-`metrics:updated`, `console:line`, `server:status:changed`, `players:updated`, `config:updated`, `whitelist:updated`, `portforward:result`, `scheduler:updated`
+`metrics:updated`, `console:line`, `server:status:changed`, `players:updated`, `config:updated`, `whitelist:updated`, `portforward:result`, `scheduler:updated`, `backups:updated`
 
 ## Coding Standards
 
@@ -83,7 +85,7 @@ API utilities are in `src/hooks/useApi.ts`: `useApi` for GET with auto-polling, 
 - No CSS frameworks or UI component libraries without explicit approval
 - Extract components when they exceed ~100 lines
 
-CSS uses flat custom properties (`--bg`, `--bg-card`, `--border`, `--text`, `--text-muted`, `--green`, `--red`, `--yellow`) defined in `src/styles/app.css` with BEM-like class naming.
+CSS uses flat custom properties defined in `src/styles/app.css` (`--bg`, `--bg-card` (glass), `--bg-elevated`, `--bg-sunken`, `--border`, `--text`, `--text-muted`, `--accent` (lantern orange), `--teal`, `--green`, `--red`, `--yellow`, `--chart-heap`/`--chart-live`) with BEM-like class naming. Surfaces are glass (`.card` / `.glass`) over `.app-bg`, a blurred `public/background.png`. Modal styles live in `src/styles/config-panel.css`.
 
 ## Development Conventions
 
@@ -97,4 +99,4 @@ CSS uses flat custom properties (`--bg`, `--bg-card`, `--border`, `--text`, `--t
 
 **Adding a new page/route:** Create the component in `src/pages/`, register the route in `src/main.tsx`, update README.
 
-**CI/CD:** `.github/workflows/deploy.yml` runs on every push to `main` — rsyncs the build to the server and restarts the `mc-server-manager` systemd unit. If the build output or command changes, update the workflow too.
+**CI/CD:** `.github/workflows/deploy.yml` runs on every push to `main` — copies the build to the server (no rsync on the VM) and restarts the `mc-server-manager` systemd unit (`KillMode=process`, so Minecraft survives). If the build output or command changes, update the workflow too.

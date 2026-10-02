@@ -1,69 +1,63 @@
 import { Router } from 'express';
+import { Server } from 'socket.io';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
 import type { BackupService } from '../services/BackupService.js';
+import type { ServerManager } from '../services/ServerManager.js';
+import type { ConfigManager } from '../services/ConfigManager.js';
 import type { AuditLogger } from '../services/AuditLogger.js';
 import type { AuthService } from '../services/AuthService.js';
 import { fail, asyncRoute } from './utils.js';
 
 export function createBackupsRouter(
   backupService: BackupService,
+  serverManager: ServerManager,
+  configManager: ConfigManager,
   auditLogger: AuditLogger,
   authService: AuthService,
+  io: Server,
 ): Router {
   const router = Router();
 
-  router.use(requireAuth(authService));
+  router.use('/api/backups', requireAuth(authService));
 
-  router.get(
-    '/api/backups/config',
-    requireRole('admin', 'moderator'),
-    asyncRoute(async (_req, res) => {
-      try {
-        const backupConfig = await backupService.getConfig();
-        res.json({ config: backupConfig });
-      } catch (error) {
-        fail(res, 500, 'Failed to get backup config', error);
-      }
-    }),
-  );
-
-  router.put(
-    '/api/backups/config',
-    requireRole('admin'),
-    asyncRoute(async (req, res) => {
-      try {
-        await backupService.setConfig(req.body ?? {});
-        void auditLogger.log(req.user ?? null, 'backup.config');
-        res.json({ success: true });
-      } catch (error) {
-        fail(res, 500, 'Failed to save backup config', error);
-      }
-    }),
-  );
+  const param = (value: string | string[] | undefined): string => (Array.isArray(value) ? value[0] : value ?? '');
 
   router.get(
     '/api/backups',
     requireRole('admin', 'moderator'),
     asyncRoute(async (_req, res) => {
-      try {
-        const backups = await backupService.listBackups();
-        res.json({ backups });
-      } catch (error) {
-        fail(res, 500, 'Failed to list backups', error);
-      }
+      res.json(await backupService.getStatus());
     }),
   );
 
   router.post(
-    '/api/backups',
+    '/api/backups/run',
     requireRole('admin', 'moderator'),
     asyncRoute(async (req, res) => {
+      const result = await backupService.runBackup();
+      if (result.success) {
+        void auditLogger.log(req.user ?? null, 'backup.run');
+        io.emit('backups:updated', await backupService.getStatus());
+      }
+      res.status(result.success ? 200 : 409).json(result);
+    }),
+  );
+
+  router.get(
+    '/api/backups/:filename/download',
+    requireRole('admin', 'moderator'),
+    asyncRoute(async (req, res) => {
+      const filename = param(req.params.filename);
+      res.setHeader('Content-Type', 'application/gzip');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/[^A-Za-z0-9._-]/g, '')}"`);
       try {
-        const result = await backupService.createBackup();
-        if (result.success) void auditLogger.log(req.user ?? null, 'backup.create', { filename: result.filename });
-        res.json(result);
+        await backupService.streamArchive(filename, res);
+        void auditLogger.log(req.user ?? null, 'backup.download', { filename });
       } catch (error) {
-        fail(res, 500, 'Failed to create backup', error);
+        if (!res.headersSent) {
+          res.removeHeader('Content-Disposition');
+          fail(res, 400, error instanceof Error ? error.message : 'Download failed', error);
+        } else res.end();
       }
     }),
   );
@@ -72,28 +66,32 @@ export function createBackupsRouter(
     '/api/backups/:filename/restore',
     requireRole('admin'),
     asyncRoute(async (req, res) => {
-      const filename = Array.isArray(req.params.filename) ? req.params.filename[0] : req.params.filename;
-      try {
-        const result = await backupService.restoreBackup(filename);
-        if (result.success) void auditLogger.log(req.user ?? null, 'backup.restore', { filename });
-        res.json(result);
-      } catch (error) {
-        fail(res, 500, 'Failed to restore backup', error);
-      }
+      const filename = param(req.params.filename);
+      const [worldPath, running] = await Promise.all([configManager.getWorldPath(), serverManager.isRunning()]);
+      const result = await backupService.restore(filename, worldPath, running);
+      if (result.success) void auditLogger.log(req.user ?? null, 'backup.restore', { filename, keptAs: result.keptAs });
+      res.status(result.success ? 200 : 409).json(result);
     }),
   );
 
-  router.delete(
-    '/api/backups/:filename',
+  router.get(
+    '/api/backups/config',
+    requireRole('admin'),
+    asyncRoute(async (_req, res) => {
+      res.json(await backupService.getConfig());
+    }),
+  );
+
+  router.put(
+    '/api/backups/config',
     requireRole('admin'),
     asyncRoute(async (req, res) => {
-      const filename = Array.isArray(req.params.filename) ? req.params.filename[0] : req.params.filename;
       try {
-        const result = await backupService.deleteBackup(filename);
-        if (result.success) void auditLogger.log(req.user ?? null, 'backup.delete', { filename });
-        res.json(result);
+        const saved = await backupService.setConfig(req.body ?? {});
+        void auditLogger.log(req.user ?? null, 'backup.config', { host: saved.host });
+        res.json(saved);
       } catch (error) {
-        fail(res, 500, 'Failed to delete backup', error);
+        fail(res, 400, error instanceof Error ? error.message : 'Invalid backup config');
       }
     }),
   );

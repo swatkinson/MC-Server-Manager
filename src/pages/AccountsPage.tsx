@@ -1,4 +1,3 @@
-import { useNavigate } from '@tanstack/react-router';
 import { useAccounts } from '../hooks/useAccounts';
 import { useAuth } from '../context/AuthContext';
 import { AccountRow } from '../components/AccountRow';
@@ -7,18 +6,17 @@ import { CreateAccountForm } from '../components/CreateAccountForm';
 export function AccountsPage() {
   const { user } = useAuth();
   const { users, loading, error, creating, deleting, createUser, deleteUser } = useAccounts();
-  const navigate = useNavigate();
 
   return (
     <div className="accounts-page">
-      <div className="accounts-page__header">
-        <h1 className="accounts-page__title">Account Management</h1>
-        <button className="btn btn--gray" onClick={() => void navigate({ to: '/' })}>
-          ← Back to Dashboard
-        </button>
+      <div className="page__header">
+        <div>
+          <h2 className="page__title">Accounts</h2>
+          <p className="page__subtitle">Admins have full access, moderators everything but accounts, users are read-only.</p>
+        </div>
       </div>
 
-      <div className="card">
+      <div className="card glass">
         <h2>Accounts</h2>
         {loading && <p className="accounts-page__loading">Loading…</p>}
         {error && <div className="auth-form__error">{error}</div>}

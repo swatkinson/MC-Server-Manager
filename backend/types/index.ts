@@ -25,11 +25,31 @@ export interface Player {
   isOp: boolean;
 }
 
-export interface JvmHeap {
-  heapUsed: number;
+export type JvmPressure = 'ok' | 'elevated' | 'critical';
+
+// Memory as seen from inside the Minecraft JVM (see backend JvmInspector).
+export interface JvmMemory {
+  source: 'hsperfdata' | 'rss';
+  heapUsed: number; // everything in the heap now, incl. garbage awaiting the next GC
+  heapLive: number; // old gen + survivors — what survived the last GC
   heapCommitted: number;
   heapMax: number | null;
-  approximate?: boolean; // true when sourced from process RSS rather than jstat
+  metaspaceUsed: number;
+  rss: number | null; // physical RAM the OS has given the JVM process
+  gcPausePercent: number | null; // share of wall time spent in GC pauses (last ~60 s)
+  youngGcPerMin: number | null;
+  fullGcCount: number;
+  lastFullGcAgoSec: number | null;
+  pressure: JvmPressure;
+  pressureReason: string;
+}
+
+export interface JvmSample {
+  t: number;
+  heapUsed: number;
+  heapLive: number;
+  heapCommitted: number;
+  gcPausePercent: number | null;
 }
 
 export interface TpsMetrics {
@@ -49,7 +69,7 @@ export interface SystemMetrics {
     total: number;
     used: number;
     percentage: number;
-    jvm: JvmHeap | null;
+    jvm: JvmMemory | null;
     systemOther: number;
   };
   storage: {
@@ -172,25 +192,47 @@ export interface DiscordWebhookConfig {
   };
 }
 
-export interface BackupConfig {
-  backupDir: string;
-  schedule: {
-    enabled: boolean;
-    hour: number;
-    minute: number;
-  };
-  keepCount: number;
+export interface BackupGatewayConfig {
+  host: string; // user@host of the machine running mc-backup-gateway
+  keyPath: string; // private key whose authorized_keys entry forces the gateway
 }
 
-export interface BackupInfo {
+export interface BackupArchive {
   filename: string;
   sizeBytes: number;
-  createdAt: number;
+  createdAt: number; // Unix ms
 }
 
-export interface BackupResult {
-  success: boolean;
-  filename?: string;
-  sizeBytes?: number;
-  error?: string;
+export interface HostBackupStatus {
+  configured: boolean;
+  reachable: boolean;
+  error: string | null;
+  host: string;
+  server: string;
+  keep: number;
+  archives: BackupArchive[]; // newest first
+  lastRun: { state: 'running' | 'ok' | 'failed'; startedAt: number; finishedAt: number | null; message: string } | null; // seconds
+  running: boolean;
+  restoring: boolean;
+  schedule: { nextRunAt: number | null; lastRunAt: number | null }; // Unix ms
+  disk: { total: number; free: number } | null;
+}
+
+export interface ModConfigFile {
+  path: string; // relative to its root, forward slashes
+  size: number;
+  mtimeMs: number;
+}
+
+export interface ModConfigRoot {
+  id: string;
+  label: string;
+  description: string;
+  files: ModConfigFile[];
+}
+
+export interface ModConfigVersion {
+  id: string;
+  savedAt: number; // Unix ms
+  size: number;
 }

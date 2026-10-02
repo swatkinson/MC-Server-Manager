@@ -13,9 +13,12 @@ export class PlayerManager {
   private playerJoinTimes = new Map<string, PlayerData>();
   private opsCache: Set<string> = new Set();
   private lastOpsCheckTime = 0;
+  // name (lowercased) → uuid from usercache.json, which the server updates on every login.
+  private uuidCache = new Map<string, string>();
+  private lastUuidCheckTime = 0;
 
   async getPlayerList(): Promise<Player[]> {
-    await this.refreshOpsCacheIfStale();
+    await Promise.all([this.refreshOpsCacheIfStale(), this.refreshUuidCacheIfStale()]);
     return this.getOnlinePlayers();
   }
 
@@ -25,6 +28,19 @@ export class PlayerManager {
       joinTime: Date.now(),
       isOp: this.opsCache.has(playerName),
     });
+    // New logins are written to usercache.json — pick the UUID up promptly.
+    this.lastUuidCheckTime = 0;
+    void this.refreshUuidCacheIfStale();
+  }
+
+  // Authoritative online list (from a `list` reply): keep known join times,
+  // add anyone we missed, drop anyone who's gone.
+  syncOnline(names: string[]): void {
+    const online = new Set(names);
+    for (const name of [...this.playerJoinTimes.keys()]) {
+      if (!online.has(name)) this.playerJoinTimes.delete(name);
+    }
+    for (const name of names) this.trackPlayerJoin(name);
   }
 
   trackPlayerLeave(playerName: string): void {
@@ -43,9 +59,10 @@ export class PlayerManager {
     return Array.from(this.playerJoinTimes.entries())
       .sort(([, a], [, b]) => b.joinTime - a.joinTime)
       .map(([name, data]) => ({
-        uuid: this.generateUUID(name),
+        uuid: this.uuidCache.get(name.toLowerCase()) ?? this.generateUUID(name),
         name,
-        ip: '0.0.0.0',
+        // Not exposed: player lists are broadcast to every role, including read-only users.
+        ip: '',
         joinTime: data.joinTime,
         isOp: data.isOp,
       }));
@@ -75,8 +92,22 @@ export class PlayerManager {
     }
   }
 
-  // Deterministic pseudo-UUID derived from the player name. Replace with the
-  // real UUID once we can extract it from server log lines or the query API.
+  private async refreshUuidCacheIfStale(): Promise<void> {
+    if (Date.now() - this.lastUuidCheckTime <= OPS_CACHE_TTL_MS) return;
+    this.lastUuidCheckTime = Date.now();
+    try {
+      const entries: unknown = JSON.parse(await fs.readFile(config.userCachePath, 'utf-8'));
+      if (!Array.isArray(entries)) return;
+      for (const e of entries as Array<{ name?: unknown; uuid?: unknown }>) {
+        if (typeof e.name === 'string' && typeof e.uuid === 'string') this.uuidCache.set(e.name.toLowerCase(), e.uuid);
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') console.error('Error loading usercache.json:', error);
+    }
+  }
+
+  // Deterministic pseudo-UUID derived from the player name — only used until
+  // the player shows up in usercache.json.
   private generateUUID(playerName: string): string {
     let hash = 0;
     for (let i = 0; i < playerName.length; i++) {
