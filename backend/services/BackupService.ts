@@ -164,7 +164,7 @@ export class BackupService {
 
   private async prunePreRestore(parent: string, worldName: string): Promise<void> {
     const prefix = `${worldName}.pre-restore-`;
-    const old = (await fs.readdir(parent)).filter((n) => n.startsWith(prefix)).sort().reverse();
+    const old = (await fs.readdir(parent)).filter((n) => n.startsWith(prefix)).sort((a, b) => b.localeCompare(a));
     for (const name of old.slice(KEEP_PRE_RESTORE)) {
       await fs.rm(path.join(parent, name), { recursive: true, force: true });
     }

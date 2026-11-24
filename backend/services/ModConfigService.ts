@@ -115,7 +115,7 @@ export class ModConfigService {
     const dir = this.versionDir(rootId, relPath);
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(path.join(dir, `${Date.now()}.bak`), content, 'utf-8');
-    const names = (await fs.readdir(dir)).filter((n) => n.endsWith('.bak')).sort().reverse();
+    const names = (await fs.readdir(dir)).filter((n) => n.endsWith('.bak')).sort((a, b) => b.localeCompare(a));
     await Promise.all(names.slice(VERSIONS_PER_FILE).map((n) => fs.rm(path.join(dir, n), { force: true })));
   }
 
