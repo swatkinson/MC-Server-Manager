@@ -11,6 +11,26 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # full history so SonarQube Cloud can attribute new code / blame
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # No unit-test suite exists in this project, so the TypeScript compiler
+      # (frontend + backend) acts as the automated correctness check.
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build frontend and backend
+        run: npm run build:prod
+
       - name: SonarQube Cloud scan
         uses: SonarSource/sonarqube-scan-action@v6
         env:
